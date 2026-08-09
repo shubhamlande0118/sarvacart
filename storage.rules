@@ -1,0 +1,34 @@
+rules_version = '2';
+
+// -----------------------------------------------------------------------------
+// SarvaCart — Cloud Storage Security Rules
+//
+// Path conventions:
+//   products/{productId}/{file}           -> admin-only upload (product images)
+//   profilePhotos/{uid}/{file}            -> owner-only upload (profile photo)
+//
+// Read is public so product images and avatars render for everyone.
+// -----------------------------------------------------------------------------
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Product images — only admins can upload/manage.
+    match /products/{productId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.token.admin == true;
+    }
+
+    // Profile photos — only the owning user can upload/manage their own.
+    match /profilePhotos/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Fallback: deny everything else not explicitly allowed above.
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

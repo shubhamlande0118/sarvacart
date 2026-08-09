@@ -1,0 +1,109 @@
+rules_version = '2';
+
+// -----------------------------------------------------------------------------
+// SarvaCart — Firestore Security Rules
+//
+// Role model:
+//   - Admin: request.auth.token.admin == true   (set via custom claims)
+//   - Owner: document id == request.auth.uid    (or userId field matches)
+//
+// Collection access summary:
+//   users        -> own doc read/write; admins full access
+//   products     -> read by everyone; write by admins
+//   categories   -> read by everyone; write by admins
+//   orders       -> read by owner or admin; create by owner; status update by admin
+//   cart         -> own doc read/write; admins full access
+//   wishlist     -> own doc read/write; admins full access
+//   addresses    -> own doc read/write; admins full access
+//   settings     -> read by everyone; write by admins
+// -----------------------------------------------------------------------------
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------- helpers -------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isOwnerDoc() {
+      return isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+
+    function incomingIsOwnerDoc() {
+      return isSignedIn() && request.auth.uid == request.resource.data.userId;
+    }
+
+// ----------------------------- users --------------------------------
+    match /users/{userId} {
+      allow read: if isSignedIn() && (isAdmin() || request.auth.uid == userId);
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (isAdmin() || request.auth.uid == userId);
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------- products -----------------------------
+    match /products/{productId} {
+      allow read: if true;                 // everyone can read
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------- categories ---------------------------
+    match /categories/{categoryId} {
+      allow read: if true;                 // everyone can read
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------- orders -------------------------------
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && (isAdmin() || isOwnerDoc());
+      allow create: if isSignedIn() && incomingIsOwnerDoc();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------- cart ---------------------------------
+    match /cart/{userId} {
+      allow read: if isSignedIn() && (isAdmin() || request.auth.uid == userId);
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (isAdmin() || request.auth.uid == userId);
+      allow delete: if isSignedIn() && (isAdmin() || request.auth.uid == userId);
+    }
+
+    // ----------------------------- wishlist -----------------------------
+    match /wishlist/{userId} {
+      allow read: if isSignedIn() && (isAdmin() || request.auth.uid == userId);
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (isAdmin() || request.auth.uid == userId);
+      allow delete: if isSignedIn() && (isAdmin() || request.auth.uid == userId);
+    }
+
+    // ----------------------------- addresses ----------------------------
+    match /addresses/{userId} {
+      allow read: if isSignedIn() && (isAdmin() || request.auth.uid == userId);
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (isAdmin() || request.auth.uid == userId);
+      allow delete: if isSignedIn() && (isAdmin() || request.auth.uid == userId);
+    }
+
+    // ----------------------------- settings -----------------------------
+    match /settings/{settingId} {
+      allow read: if true;                 // everyone can read
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}
