@@ -41,12 +41,12 @@ function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="glass-light inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium uppercase tracking-[0.25em] text-gold-soft"
+            className="glass-light inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium uppercase tracking-[0.25em] text-[#b8733b]"
           >
             <Sparkles className="h-4 w-4" /> The 2026 Cinematic Collection
           </motion.span>
 
-          <h1 className="mt-6 font-serif text-5xl font-bold leading-[1.05] text-white sm:text-7xl lg:text-8xl">
+          <h1 className="mt-6 font-serif text-5xl font-bold leading-[1.05] text-[#1c1917] sm:text-7xl lg:text-8xl">
             {"Luxury,".split("").map((c, i) => (
               <motion.span
                 key={i}
@@ -73,7 +73,7 @@ function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8, duration: 0.7 }}
-            className="mt-6 max-w-xl text-lg text-zinc-300"
+            className="mt-6 max-w-xl text-lg text-[#5e5753]"
           >
             Where Apple-grade product storytelling meets the soul of a fashion house. Discover
             curated wear, fine jewellery, and future-tech — staged like cinema.
@@ -97,18 +97,18 @@ function Hero() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.3, duration: 0.8 }}
-            className="mt-12 flex flex-wrap gap-8 text-sm text-zinc-400"
+            className="mt-12 flex flex-wrap gap-8 text-sm text-[#5d5753]"
           >
             <div>
-              <p className="font-serif text-3xl font-bold text-white">12k+</p>
+              <p className="font-serif text-3xl font-bold text-[#1c1917]">12k+</p>
               <p>Curated members</p>
             </div>
             <div>
-              <p className="font-serif text-3xl font-bold text-white">4.9★</p>
+              <p className="font-serif text-3xl font-bold text-[#1c1917]">4.9★</p>
               <p>Average rating</p>
             </div>
             <div>
-              <p className="font-serif text-3xl font-bold text-white">48h</p>
+              <p className="font-serif text-3xl font-bold text-[#1c1917]">48h</p>
               <p>Express delivery</p>
             </div>
           </motion.div>
@@ -141,12 +141,12 @@ export default function Home() {
           {perks.map((p, i) => (
             <Reveal key={p.title} delay={i * 0.1}>
               <div className="glass flex items-start gap-4 rounded-2xl p-6">
-                <div className="rounded-xl bg-gold/10 p-3 text-gold">
+                <div className="rounded-xl bg-[#f9eee4] p-3 text-[#b8733b]">
                   <p.icon className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white">{p.title}</h3>
-                  <p className="text-sm text-zinc-400">{p.text}</p>
+                  <h3 className="font-semibold text-[#1c1917]">{p.title}</h3>
+                  <p className="text-sm text-[#665f5a]">{p.text}</p>
                 </div>
               </div>
             </Reveal>
@@ -201,14 +201,14 @@ export default function Home() {
             loading="lazy"
           />
         </Parallax>
-        <div className="absolute inset-0 flex items-center bg-black/55">
+        <div className="absolute inset-0 flex items-center bg-[#1d1a18]/50">
           <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
             <Reveal>
-<p className="text-xs uppercase tracking-[0.3em] text-gold-soft">The SarvaCart Ethos</p>
+              <p className="text-xs uppercase tracking-[0.3em] text-[#f0c39b]">The SarvaCart Ethos</p>
               <h2 className="mt-3 max-w-2xl font-serif text-4xl font-bold text-white sm:text-6xl">
                 Objects designed to be lived with — and remembered.
               </h2>
-              <Button to="/about" variant="outline" className="mt-7">
+              <Button to="/about" variant="outline" className="mt-7 border-white/40 bg-white/5 text-white hover:bg-white/10">
                 Our Story <ArrowRight className="h-4 w-4" />
               </Button>
             </Reveal>
@@ -248,29 +248,29 @@ export default function Home() {
       {/* newsletter CTA */}
       <section className="mx-auto max-w-7xl px-4 pb-24 sm:px-6">
         <Reveal>
-          <div className="glass relative overflow-hidden rounded-3xl px-6 py-16 text-center sm:px-12">
-            <div className="aurora absolute inset-0 opacity-60" />
-            <div className="relative">
-              <h2 className="font-serif text-3xl font-bold text-white sm:text-5xl">
-                Join the inner circle
-              </h2>
-              <p className="mx-auto mt-3 max-w-md text-zinc-300">
-                Early access to drops, private sales and styling sessions. No noise — only craft.
-              </p>
-              <form
-                onSubmit={(e) => e.preventDefault()}
-                className="mx-auto mt-8 flex max-w-md flex-col gap-3 sm:flex-row"
-              >
-                <input
-                  type="email"
-                  required
-                  placeholder="you@example.com"
-                  className="glass-light flex-1 rounded-full px-5 py-3.5 text-sm text-white placeholder-zinc-500 outline-none focus:border-gold/50"
-                />
-                <Button type="submit">Subscribe</Button>
-              </form>
-            </div>
-          </div>
+           <div className="glass relative overflow-hidden rounded-3xl px-6 py-16 text-center sm:px-12">
+             <div className="aurora absolute inset-0 opacity-60" />
+             <div className="relative">
+               <h2 className="font-serif text-3xl font-bold text-[#1c1917] sm:text-5xl">
+                 Join the inner circle
+               </h2>
+               <p className="mx-auto mt-3 max-w-md text-[#665f5a]">
+                 Early access to drops, private sales and styling sessions. No noise — only craft.
+               </p>
+               <form
+                 onSubmit={(e) => e.preventDefault()}
+                 className="mx-auto mt-8 flex max-w-md flex-col gap-3 sm:flex-row"
+               >
+                 <input
+                   type="email"
+                   required
+                   placeholder="you@example.com"
+                   className="glass-light flex-1 rounded-full px-5 py-3.5 text-sm text-[#1c1917] placeholder:text-[#81756f] outline-none focus:border-[#d9b18b]"
+                 />
+                 <Button type="submit">Subscribe</Button>
+               </form>
+             </div>
+           </div>
         </Reveal>
       </section>
     </Page>

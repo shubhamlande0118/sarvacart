@@ -95,7 +95,7 @@ export default function App() {
     <StoreProvider>
       <HashRouter>
         <ScrollToTop />
-        <div className="flex min-h-screen flex-col bg-[#0a0a0c]">
+        <div className="flex min-h-screen flex-col bg-[radial-gradient(circle_at_top_left,_rgba(184,115,59,0.08),transparent_24%),radial-gradient(circle_at_bottom_right,_rgba(184,115,59,0.06),transparent_22%),#f7f2eb] text-[#1c1917]">
           <Navbar />
           <div className="flex-1">
             <AnimatedRoutes />

@@ -88,23 +88,23 @@ export default function Shop() {
       {/* search + sort bar */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <div className="glass-light flex flex-1 items-center gap-2 rounded-full px-4 py-3">
-          <Search className="h-4 w-4 text-zinc-400" />
+          <Search className="h-4 w-4 text-[#786d67]" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search products…"
-            className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
+            className="w-full bg-transparent text-sm text-[#1c1917] placeholder:text-[#81756f] outline-none"
           />
           {query && (
             <button onClick={() => setQuery("")}>
-              <X className="h-4 w-4 text-zinc-500" />
+              <X className="h-4 w-4 text-[#7a716c]" />
             </button>
           )}
         </div>
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value as SortKey)}
-          className="glass-light rounded-full px-4 py-3 text-sm text-white outline-none [&>option]:bg-[#15151a]"
+          className="glass-light rounded-full px-4 py-3 text-sm text-[#1c1917] outline-none [&>option]:bg-[#f5efe9]"
         >
           {sorts.map((s) => (
             <option key={s.key} value={s.key}>
@@ -114,7 +114,7 @@ export default function Shop() {
         </select>
         <button
           onClick={() => setShowFilters((v) => !v)}
-          className="glass-light flex items-center gap-2 rounded-full px-4 py-3 text-sm text-white lg:hidden"
+          className="glass-light flex items-center gap-2 rounded-full px-4 py-3 text-sm text-[#1c1917] lg:hidden"
         >
           <SlidersHorizontal className="h-4 w-4" /> Filters
         </button>
@@ -129,7 +129,7 @@ export default function Shop() {
           )}
         >
           <div className="glass rounded-2xl p-5">
-            <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-gold-soft">
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-[#b8733b]">
               Category
             </h3>
             <div className="flex flex-wrap gap-2 lg:flex-col">
@@ -140,8 +140,8 @@ export default function Shop() {
                   className={cn(
                     "rounded-full px-4 py-2 text-left text-sm transition lg:rounded-xl",
                     activeCat === c.slug
-                      ? "bg-gold/15 text-gold-soft"
-                      : "text-zinc-300 hover:bg-white/5"
+                      ? "bg-[#f9eee4] text-[#b8733b]"
+                      : "text-[#524a47] hover:bg-[#f6f1ed]"
                   )}
                 >
                   {c.name}
@@ -151,7 +151,7 @@ export default function Shop() {
           </div>
 
           <div className="glass rounded-2xl p-5">
-            <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-gold-soft">
+            <h3 className="mb-4 text-sm font-semibold uppercase tracking-widest text-[#b8733b]">
               Max Price
             </h3>
             <input
@@ -161,9 +161,9 @@ export default function Shop() {
               step={5000}
               value={maxPrice}
               onChange={(e) => setMaxPrice(Number(e.target.value))}
-              className="w-full accent-[#d4af37]"
+              className="w-full accent-[#b8733b]"
             />
-            <p className="mt-2 text-sm text-zinc-300">
+            <p className="mt-2 text-sm text-[#554d49]">
               Up to <span className="text-gradient-gold font-semibold">{formatINR(maxPrice)}</span>
             </p>
           </div>

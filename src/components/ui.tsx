@@ -97,11 +97,11 @@ export function Button({
     lg: "px-8 py-4 text-sm",
   };
   const variants = {
-    gold: "bg-gradient-to-r from-[#e8cf8f] via-[#d4af37] to-[#b8860b] text-black hover:shadow-[0_0_30px_-4px_rgba(212,175,55,0.6)] hover:-translate-y-0.5",
+    gold: "bg-gradient-to-r from-[#e8cf8f] via-[#b8733b] to-[#8b5630] text-[#fffaf6] hover:shadow-[0_0_30px_-4px_rgba(184,115,59,0.32)] hover:-translate-y-0.5",
     outline:
-      "border border-gold/40 text-gold-soft hover:border-gold hover:bg-gold/10 hover:-translate-y-0.5",
-    ghost: "text-zinc-300 hover:text-gold-soft",
-    dark: "bg-white/5 border border-white/10 text-white hover:bg-white/10 hover:-translate-y-0.5",
+      "border border-[#ddba96] bg-[#fffaf6] text-[#b8733b] hover:border-[#b8733b] hover:bg-[#fcefe6] hover:-translate-y-0.5",
+    ghost: "text-[#534d4a] hover:text-[#b8733b]",
+    dark: "bg-[#1f1b19] border border-[#2d2825] text-white hover:bg-[#292321] hover:-translate-y-0.5",
   };
   const cls = cn(base, sizes[size], variants[variant], full && "w-full", className);
 
@@ -159,14 +159,14 @@ export function SectionTitle({
   return (
     <div className={cn("max-w-2xl", center && "mx-auto text-center")}>
       {eyebrow && (
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-gold-soft">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#b8733b]">
           {eyebrow}
         </p>
       )}
-      <h2 className="font-serif text-4xl font-semibold leading-tight text-white sm:text-5xl">
+      <h2 className="font-serif text-4xl font-semibold leading-tight text-[#1c1917] sm:text-5xl">
         {title}
       </h2>
-      {subtitle && <p className="mt-4 text-zinc-400">{subtitle}</p>}
+      {subtitle && <p className="mt-4 text-[#665f5a]">{subtitle}</p>}
     </div>
   );
 }

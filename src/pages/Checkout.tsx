@@ -132,13 +132,13 @@ export default function Checkout() {
 
   return (
     <Page className="mx-auto max-w-7xl px-4 pb-24 pt-28 sm:px-6">
-      <h1 className="font-serif text-4xl font-bold text-white sm:text-5xl">Checkout</h1>
+      <h1 className="font-serif text-4xl font-bold text-[#1c1917] sm:text-5xl">Checkout</h1>
 
       <form onSubmit={submit} className="mt-10 grid gap-8 lg:grid-cols-[1fr_400px]">
         <div className="space-y-8">
           {/* delivery details */}
           <div className="glass rounded-2xl p-6">
-            <h2 className="font-serif text-2xl font-bold text-white">Delivery Details</h2>
+            <h2 className="font-serif text-2xl font-bold text-[#1c1917]">Delivery Details</h2>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               {field("name", "Full Name")}
               {field("phone", "Phone Number", "tel")}
@@ -149,8 +149,8 @@ export default function Checkout() {
 
           {/* payment */}
           <div className="glass rounded-2xl p-6">
-            <h2 className="font-serif text-2xl font-bold text-white">Payment Method</h2>
-<div className="mt-5 space-y-3">
+            <h2 className="font-serif text-2xl font-bold text-[#1c1917]">Payment Method</h2>
+            <div className="mt-5 space-y-3">
               {payments.map((p) => (
                 <button
                   type="button"
@@ -168,26 +168,26 @@ export default function Checkout() {
                     p.disabled && "cursor-not-allowed opacity-60",
                     !p.disabled &&
                       (payment === p.key
-                        ? "border-gold bg-gold/10"
-                        : "border-white/10 hover:border-white/30")
+                        ? "border-[#d9b18b] bg-[#f9eee4]"
+                        : "border-[#e7ddd5] hover:border-[#d9b18b]")
                   )}
                 >
-                  <div className={cn("rounded-lg p-2.5", payment === p.key && !p.disabled ? "bg-gold/20 text-gold" : "bg-white/5 text-zinc-300")}>
+                  <div className={cn("rounded-lg p-2.5", payment === p.key && !p.disabled ? "bg-[#f6e7d9] text-[#b8733b]" : "bg-[#f8f4f0] text-[#654e40]")}>
                     <p.icon className="h-5 w-5" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium text-white">{p.key}</p>
-                    <p className="text-xs text-zinc-400">{p.desc}</p>
+                    <p className="font-medium text-[#1c1917]">{p.key}</p>
+                    <p className="text-xs text-[#665f5a]">{p.desc}</p>
                   </div>
                   {p.disabled ? (
-                    <span className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-zinc-300">
+                    <span className="flex items-center gap-1 rounded-full bg-[#f3efe9] px-2.5 py-1 text-[11px] font-semibold text-[#5c524d]">
                       <Clock className="h-3 w-3" /> Coming Soon
                     </span>
                   ) : (
                     <span
                       className={cn(
                         "h-5 w-5 rounded-full border-2",
-                        payment === p.key ? "border-gold bg-gold" : "border-white/30"
+                        payment === p.key ? "border-[#b8733b] bg-[#b8733b]" : "border-[#b7aca5]"
                       )}
                     />
                   )}
@@ -200,31 +200,31 @@ export default function Checkout() {
         {/* summary */}
         <div className="h-fit lg:sticky lg:top-28">
           <div className="glass rounded-2xl p-6">
-            <h2 className="font-serif text-2xl font-bold text-white">Order Summary</h2>
+            <h2 className="font-serif text-2xl font-bold text-[#1c1917]">Order Summary</h2>
             <div className="mt-5 max-h-60 space-y-3 overflow-auto pr-1">
               {lines.map((l) => (
                 <div key={l.productId + l.size + l.color} className="flex gap-3">
                   <img src={l.product.images[0]} alt="" className="h-16 w-14 rounded-lg object-cover" />
                   <div className="flex flex-1 flex-col justify-center">
-                    <p className="text-sm text-white">{l.product.name}</p>
-                    <p className="text-xs text-zinc-500">Qty {l.qty}</p>
+                    <p className="text-sm text-[#1c1917]">{l.product.name}</p>
+                    <p className="text-xs text-[#7d736d]">Qty {l.qty}</p>
                   </div>
-                  <p className="self-center text-sm text-gold-soft">
+                  <p className="self-center text-sm text-[#b8733b]">
                     {formatINR(l.product.discountPrice * l.qty)}
                   </p>
                 </div>
               ))}
             </div>
-            <dl className="mt-5 space-y-2 border-t border-white/10 pt-5 text-sm">
-              <div className="flex justify-between text-zinc-300"><dt>Subtotal</dt><dd>{formatINR(subtotal)}</dd></div>
-              <div className="flex justify-between text-emerald-400"><dt>Discount</dt><dd>− {formatINR(discount)}</dd></div>
-              <div className="flex justify-between text-zinc-300"><dt>Delivery</dt><dd>{delivery === 0 ? "Free" : formatINR(delivery)}</dd></div>
-              <div className="flex justify-between border-t border-white/10 pt-3 text-lg font-semibold text-white">
+            <dl className="mt-5 space-y-2 border-t border-[#e7ddd5] pt-5 text-sm">
+              <div className="flex justify-between text-[#4a433f]"><dt>Subtotal</dt><dd>{formatINR(subtotal)}</dd></div>
+              <div className="flex justify-between text-[#2e8b57]"><dt>Discount</dt><dd>− {formatINR(discount)}</dd></div>
+              <div className="flex justify-between text-[#4a433f]"><dt>Delivery</dt><dd>{delivery === 0 ? "Free" : formatINR(delivery)}</dd></div>
+              <div className="flex justify-between border-t border-[#e7ddd5] pt-3 text-lg font-semibold text-[#1c1917]">
                 <dt>Total</dt><dd className="text-gradient-gold">{formatINR(total)}</dd>
               </div>
             </dl>
             <Button type="submit" full size="lg" className="mt-6">Place Order</Button>
-            <Link to="/cart" className="mt-4 block text-center text-sm text-zinc-400 hover:text-gold-soft">
+            <Link to="/cart" className="mt-4 block text-center text-sm text-[#665f5a] hover:text-[#b8733b]">
               Back to cart
             </Link>
           </div>

@@ -36,11 +36,11 @@ export default function Signup() {
         transition={{ duration: 0.6 }}
         className="glass relative w-full max-w-md rounded-3xl p-8"
       >
-<div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <BrandLogo />
         </div>
-        <h1 className="mt-6 font-serif text-3xl font-bold text-white">Create your account</h1>
-        <p className="mt-1 text-sm text-zinc-400">Join the inner circle of SarvaCart.</p>
+        <h1 className="mt-6 font-serif text-3xl font-bold text-[#1c1917]">Create your account</h1>
+        <p className="mt-1 text-sm text-[#665f5a]">Join the inner circle of SarvaCart.</p>
 
         <form onSubmit={submit} className="mt-7 space-y-4">
           <Field icon={User}>
@@ -48,7 +48,7 @@ export default function Signup() {
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="Full name"
-              className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
+              className="w-full bg-transparent text-sm text-[#1c1917] placeholder:text-[#81756f] outline-none"
             />
           </Field>
           <Field icon={Mail}>
@@ -57,7 +57,7 @@ export default function Signup() {
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               placeholder="Email address"
-              className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
+              className="w-full bg-transparent text-sm text-[#1c1917] placeholder:text-[#81756f] outline-none"
             />
           </Field>
           <Field icon={Lock}>
@@ -66,7 +66,7 @@ export default function Signup() {
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               placeholder="Password"
-              className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
+              className="w-full bg-transparent text-sm text-[#1c1917] placeholder:text-[#81756f] outline-none"
             />
           </Field>
           <Field icon={Lock}>
@@ -75,7 +75,7 @@ export default function Signup() {
               value={form.confirm}
               onChange={(e) => setForm({ ...form, confirm: e.target.value })}
               placeholder="Confirm password"
-              className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
+              className="w-full bg-transparent text-sm text-[#1c1917] placeholder:text-[#81756f] outline-none"
             />
           </Field>
           {error && <p className="text-sm text-red-400">{error}</p>}
@@ -84,9 +84,9 @@ export default function Signup() {
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-zinc-400">
+        <p className="mt-6 text-center text-sm text-[#665f5a]">
           Already a member?{" "}
-          <Link to="/login" className="text-gold-soft hover:underline">Sign in</Link>
+          <Link to="/login" className="text-[#b8733b] hover:underline">Sign in</Link>
         </p>
       </motion.div>
     </Page>
