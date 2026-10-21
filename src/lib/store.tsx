@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { seedProducts, type Product } from "../data/seed";
+import { computeOrderTotals } from "./pricing";
 import {
   type CartItem,
   type Order,
@@ -23,11 +24,13 @@ import {
   repoGetProducts,
   repoUpsertProduct,
   repoDeleteProduct,
-  repoReduceStock,
-  repoCreateUser,
   repoPlaceOrder,
   repoUpdateOrderStatus,
+  repoFetchUser,
   repoGetAllOrders,
+  repoSubscribeOrdersForUser,
+  repoRefreshOrderTracking,
+  repoAssignDelhiveryWaybill,
 } from "../services/repository";
 import { toFriendlyFirebaseError } from "./firebaseExports";
 
@@ -48,6 +51,7 @@ interface StoreState {
   products: Product[];
   user: User | null;
   isAdmin: boolean;
+  isAuthReady: boolean;
   cart: CartItem[];
   orders: Order[];
   toasts: Toast[];
@@ -57,10 +61,10 @@ interface StoreContextValue extends StoreState {
   // auth
   register: (name: string, email: string, password: string) => Promise<boolean>;
   login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   adminLogin: (email: string, password: string) => Promise<boolean>;
-  adminLogout: () => void;
-  updateProfile: (data: Partial<Pick<User, "name" | "phone" | "address">>) => void;
+  adminLogout: () => Promise<void>;
+  updateProfile: (data: Partial<Pick<User, "name" | "phone" | "address">>) => Promise<void>;
   // cart
   addToCart: (productId: string, qty?: number, opts?: { size?: string; color?: string }) => void;
   removeFromCart: (item: CartItem) => void;
@@ -71,12 +75,14 @@ interface StoreContextValue extends StoreState {
   placeOrder: (
     customer: Order["customer"],
     payment: Order["payment"]
-  ) => Order | null;
+  ) => Promise<Order | null>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  refreshOrderTracking: (orderId: string) => Promise<void>;
+  assignDelhiveryWaybill: (orderId: string, awb: string) => Promise<void>;
   // products (admin)
-  addProduct: (p: Omit<Product, "id" | "createdAt">) => void;
-  updateProduct: (id: string, p: Partial<Product>) => void;
-  deleteProduct: (id: string) => void;
+  addProduct: (p: Omit<Product, "id" | "createdAt">) => Promise<void>;
+  updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
   getProduct: (id: string) => Product | undefined;
   // toast
   toast: (type: Toast["type"], message: string) => void;
@@ -86,15 +92,8 @@ interface StoreContextValue extends StoreState {
 /* ------------------------------- Persistence ------------------------------ */
 const LS = {
   products: "sarvacart.products",
-  users: "sarvacart.users",
-  session: "sarvacart.session",
-  admin: "sarvacart.admin",
   cart: "sarvacart.cart",
-  orders: "sarvacart.orders",
 };
-
-const ADMIN_EMAIL = "admin@sarvacart.store";
-const ADMIN_PASSWORD = "Admin@123";
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -119,18 +118,18 @@ const StoreContext = createContext<StoreContextValue | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>(() => read(LS.products, seedProducts));
-  const [users, setUsers] = useState<User[]>(() => read<User[]>(LS.users, []));
-  const [user, setUser] = useState<User | null>(() => {
-    const id = read<string | null>(LS.session, null);
-    if (!id) return null;
-    return read<User[]>(LS.users, []).find((u) => u.id === id) ?? null;
-  });
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => read(LS.admin, false));
+  const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(!isFirebaseConfigured);
   const [cart, setCart] = useState<CartItem[]>(() => read<CartItem[]>(LS.cart, []));
-  const [orders, setOrders] = useState<Order[]>(() => read<Order[]>(LS.orders, []));
+  const [orders, setOrders] = useState<Order[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [loadingAuth, setLoadingAuth] = useState(false);
   const timers = useRef<Record<string, number>>({});
+  const reportFirebaseError = useCallback((err: unknown) => {
+    const id = uid();
+    setToasts((current) => [...current, { id, type: "error", message: toFriendlyFirebaseError(err) }]);
+  }, []);
 
   // keep auth loading state referenced so TS doesn't error under noUnusedLocals
   useEffect(() => {
@@ -138,25 +137,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [loadingAuth]);
 
 useEffect(() => write(LS.products, products), [products]);
-  useEffect(() => write(LS.users, users), [users]);
   useEffect(() => write(LS.cart, cart), [cart]);
-  useEffect(() => write(LS.orders, orders), [orders]);
-  useEffect(() => write(LS.session, user?.id ?? null), [user]);
-  useEffect(() => write(LS.admin, isAdmin), [isAdmin]);
 
-  /* Firebase bootstrap: when configured, hydrate products & orders from Firestore. */
+  /* Firebase bootstrap: public products are safe to fetch before login. */
   useEffect(() => {
     if (!isFirebaseConfigured) return;
     let cancelled = false;
     (async () => {
       try {
-        const [fbProducts, fbOrders] = await Promise.all([
-          repoGetProducts(),
-          repoGetAllOrders(),
-        ]);
+        const fbProducts = await repoGetProducts();
         if (cancelled) return;
-        if (fbProducts.length) setProducts(fbProducts);
-        if (fbOrders.length) setOrders(fbOrders);
+        setProducts(fbProducts);
       } catch (err) {
         if (import.meta.env.DEV) {
           console.warn("Firestore sync error:", err);
@@ -167,6 +158,86 @@ useEffect(() => write(LS.products, products), [products]);
       cancelled = true;
     };
   }, []);
+
+  // Firebase Auth is authoritative. Do not make protected-route decisions
+  // until persistence has been configured and the first auth callback arrives.
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+    (async () => {
+      const { onAuthStateChange, getAdminClaim } = await import("../services/auth");
+      unsubscribe = await onAuthStateChange(async (firebaseUser) => {
+        if (!active) return;
+        if (!firebaseUser) {
+          setUser(null);
+          setIsAdmin(false);
+          setOrders([]);
+          setIsAuthReady(true);
+          return;
+        }
+        try {
+          const [profile, admin] = await Promise.all([
+            repoFetchUser(firebaseUser.uid),
+            getAdminClaim(firebaseUser),
+          ]);
+          if (!active) return;
+          setUser({
+            id: firebaseUser.uid,
+            name: profile?.name || firebaseUser.displayName || "Customer",
+            email: profile?.email || firebaseUser.email || "",
+            phone: profile?.phone,
+            address: (profile as (typeof profile & { address?: string }) | null)?.address,
+            createdAt: profile?.createdAt || Date.now(),
+          });
+          setIsAdmin(admin);
+        } catch (err) {
+          if (active) reportFirebaseError(err);
+        } finally {
+          if (active) setIsAuthReady(true);
+        }
+      });
+    })().catch((err) => {
+      if (active) {
+        reportFirebaseError(err);
+        setIsAuthReady(true);
+      }
+    });
+    return () => { active = false; unsubscribe?.(); };
+  }, [reportFirebaseError]);
+
+  // Regular customers only ever issue an owner-filtered query. The all-orders
+  // query is reserved for a Firebase custom-claim administrator.
+  useEffect(() => {
+    if (!isFirebaseConfigured || !isAuthReady || !user) return;
+    let cancelled = false;
+    let unsubscribe: () => void = () => undefined;
+    const load = async () => {
+      try {
+        if (isAdmin) {
+          const result = await repoGetAllOrders();
+          if (!cancelled) setOrders(result);
+          return;
+        }
+        unsubscribe = repoSubscribeOrdersForUser(
+          user.id,
+          (result) => {
+            if (!cancelled) setOrders(result);
+          },
+          (err) => {
+            if (!cancelled) reportFirebaseError(err);
+          },
+        );
+      } catch (err) {
+        if (!cancelled) reportFirebaseError(err);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [user?.id, isAdmin, isAuthReady, reportFirebaseError]);
 
   /* toasts */
   const dismissToast = useCallback((id: string) => {
@@ -181,21 +252,17 @@ useEffect(() => write(LS.products, products), [products]);
     [dismissToast]
   );
 
-  /* auth (Firebase only; local demo data remains for cart/products) */
+  /* Authentication is backed exclusively by Firebase Auth. */
   const register = useCallback(
-async (name: string, email: string, password: string) => {
+    async (name: string, email: string, password: string) => {
       setLoadingAuth(true);
       try {
-        // actual signup + verification email
-        const { emailSignup } = await import("./authService");
-        await emailSignup({ name, email, password });
-        // persist a Firestore profile when the backend is live
-if (isFirebaseConfigured) {
-          const { auth } = await import("./firebaseExports");
-          const uid = auth().currentUser?.uid;
-          if (uid) await repoCreateUser({ id: uid, name, email });
-        }
-toast("success", "Account created. Please verify your email.");
+        if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+        const { signUpWithEmail } = await import("../services/auth");
+        // signUpWithEmail uses the User returned by Firebase directly to write
+        // /users/{uid}; it never reads auth.currentUser as a race-prone proxy.
+        await signUpWithEmail(name, email, password);
+        toast("success", "Account created. Please verify your email.");
         return true;
       } catch (err) {
         toast("error", toFriendlyFirebaseError(err));
@@ -211,10 +278,10 @@ toast("success", "Account created. Please verify your email.");
     async (email: string, password: string) => {
       setLoadingAuth(true);
       try {
-        const { emailLogin } = await import("./authService");
-        await emailLogin({ email, password });
-
-// Let auth listener set user. We only return ok for navigation.
+        if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+        const { logInWithEmail } = await import("../services/auth");
+        await logInWithEmail(email, password);
+        // The auth subscription updates user and protected routes.
         toast("success", "Signed in successfully.");
         return true;
       } catch (err) {
@@ -227,46 +294,53 @@ toast("success", "Account created. Please verify your email.");
     [toast]
   );
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     setLoadingAuth(true);
-    (async () => {
-      try {
-        const { logout: fbLogout } = await import("./authService");
-        await fbLogout();
-        toast("info", "You have been signed out.");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Unable to sign out.";
-        toast("error", msg);
-      } finally {
-        setLoadingAuth(false);
-      }
-    })();
+    try {
+      const { logOut } = await import("../services/auth");
+      await logOut();
+      toast("info", "You have been signed out.");
+    } catch (err) {
+      toast("error", toFriendlyFirebaseError(err));
+    } finally {
+      setLoadingAuth(false);
+    }
   }, [toast]);
 
   const adminLogin = useCallback(
     async (email: string, password: string) => {
-      if (email.toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-        setIsAdmin(true);
+      try {
+        if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+        const { getAdminClaim, logInWithEmail } = await import("../services/auth");
+        const firebaseUser = await logInWithEmail(email, password);
+        if (!await getAdminClaim(firebaseUser)) {
+          await logout();
+          toast("error", "This account does not have administrator access.");
+          return false;
+        }
         toast("success", "Admin access granted.");
         return true;
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+        return false;
       }
-      toast("error", "Invalid admin credentials.");
-      return false;
     },
-    [toast]
+    [logout, toast]
   );
-  const adminLogout = useCallback(() => {
-    setIsAdmin(false);
-    toast("info", "Admin signed out.");
-  }, [toast]);
+  const adminLogout = logout;
 
   const updateProfile = useCallback(
-    (data: Partial<Pick<User, "name" | "phone" | "address">>) => {
+    async (data: Partial<Pick<User, "name" | "phone" | "address">>) => {
       if (!user) return;
       const updated = { ...user, ...data };
-      setUser(updated);
-      setUsers((list) => list.map((u) => (u.id === user.id ? updated : u)));
-      toast("success", "Profile updated.");
+      try {
+        const { repoUpdateUser } = await import("../services/repository");
+        await repoUpdateUser(user.id, data);
+        setUser(updated);
+        toast("success", "Profile updated.");
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+      }
     },
     [user, toast]
   );
@@ -278,16 +352,17 @@ toast("success", "Account created. Please verify your email.");
   const addToCart = useCallback(
     (productId: string, qty = 1, opts?: { size?: string; color?: string }) => {
       const product = products.find((p) => p.id === productId);
-      if (!product || product.stock <= 0) {
+      const requestedQty = Math.floor(qty);
+      if (!product || product.stock <= 0 || requestedQty < 1) {
         toast("error", "This item is out of stock.");
         return;
       }
-      const line: CartItem = { productId, qty, size: opts?.size, color: opts?.color };
+      const line: CartItem = { productId, qty: Math.min(requestedQty, product.stock), size: opts?.size, color: opts?.color };
       setCart((c) => {
         const idx = c.findIndex((x) => sameLine(x, line));
         if (idx >= 0) {
           const next = [...c];
-          next[idx] = { ...next[idx], qty: Math.min(next[idx].qty + qty, product.stock) };
+          next[idx] = { ...next[idx], qty: Math.min(next[idx].qty + requestedQty, product.stock) };
           return next;
         }
         return [...c, line];
@@ -302,12 +377,13 @@ toast("success", "Account created. Please verify your email.");
   }, []);
 
   const setQty = useCallback((item: CartItem, qty: number) => {
-    setCart((c) =>
-      c
-        .map((x) => (sameLine(x, item) ? { ...x, qty } : x))
-        .filter((x) => x.qty > 0)
-    );
-  }, []);
+    setCart((c) => c.flatMap((x) => {
+      if (!sameLine(x, item)) return [x];
+      const product = products.find((p) => p.id === x.productId);
+      const boundedQty = Math.min(Math.max(Math.floor(qty), 0), product?.stock ?? 0);
+      return boundedQty > 0 ? [{ ...x, qty: boundedQty }] : [];
+    }));
+  }, [products]);
 
   const clearCart = useCallback(() => setCart([]), []);
 
@@ -315,8 +391,17 @@ toast("success", "Account created. Please verify your email.");
 
   /* orders */
   const placeOrder = useCallback(
-    (customer: Order["customer"], payment: Order["payment"]) => {
-      if (cart.length === 0) return null;
+    async (customer: Order["customer"], payment: Order["payment"]) => {
+      if (!user || cart.length === 0) return null;
+      if (!isFirebaseConfigured) {
+        toast("error", "Checkout requires Firebase to be configured.");
+        return null;
+      }
+      const invalidLine = cart.some((c) => !products.find((p) => p.id === c.productId));
+      if (invalidLine) {
+        toast("error", "One or more cart products are no longer available.");
+        return null;
+      }
       const lines: OrderLine[] = cart.map((c) => {
         const p = products.find((x) => x.id === c.productId)!;
         return {
@@ -329,21 +414,16 @@ toast("success", "Account created. Please verify your email.");
           color: c.color,
         };
       });
-      const subtotal = cart.reduce((s, c) => {
-        const p = products.find((x) => x.id === c.productId)!;
-        return s + p.price * c.qty;
-      }, 0);
-      const discounted = cart.reduce((s, c) => {
-        const p = products.find((x) => x.id === c.productId)!;
-        return s + p.discountPrice * c.qty;
-      }, 0);
-      const discount = subtotal - discounted;
-      const delivery = discounted > 50000 ? 0 : 499;
-      const total = discounted + delivery;
+      const { subtotal, discount, delivery, total } = computeOrderTotals(
+        cart.map((c) => {
+          const p = products.find((x) => x.id === c.productId)!;
+          return { price: p.price, discountPrice: p.discountPrice, qty: c.qty };
+        }),
+      );
 
       const order: Order = {
         id: "PG" + Date.now().toString(36).toUpperCase(),
-        userId: user?.id ?? null,
+        userId: user.id,
         customer,
         items: lines,
         subtotal,
@@ -354,63 +434,103 @@ payment,
         status: "Pending Confirmation",
         createdAt: Date.now(),
       };
-      setOrders((o) => [order, ...o]);
-      // reduce stock
-      setProducts((ps) =>
-        ps.map((p) => {
-          const ordered = cart.filter((c) => c.productId === p.id).reduce((n, c) => n + c.qty, 0);
-          return ordered ? { ...p, stock: Math.max(0, p.stock - ordered) } : p;
-        })
-      );
-      setCart([]);
-      // sync to Firestore when the backend is live
-      if (isFirebaseConfigured) {
-        void repoPlaceOrder(order);
-        void repoReduceStock(
-          cart.map((c) => ({ productId: c.productId, qty: c.qty }))
-        );
+      try {
+        // Firestore rules bind the order to the authenticated owner and COD
+        // status. Cart clearing happens only after the create succeeds.
+        const confirmed = await repoPlaceOrder(order);
+        setOrders((o) => [confirmed, ...o.filter((existing) => existing.id !== confirmed.id)]);
+        setCart([]);
+        toast("success", "Order placed successfully!");
+        return confirmed;
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+        return null;
       }
-      toast("success", "Order placed successfully!");
-      return order;
     },
     [cart, products, user, toast]
   );
 
-const updateOrderStatus = useCallback(
-    (orderId: string, status: OrderStatus) => {
-      setOrders((o) => o.map((x) => (x.id === orderId ? { ...x, status } : x)));
-      if (isFirebaseConfigured) void repoUpdateOrderStatus(orderId, status);
-      toast("success", `Order ${orderId} → ${status}`);
+  const updateOrderStatus = useCallback(
+    async (orderId: string, status: OrderStatus) => {
+      if (!isAdmin) {
+        toast("error", "Administrator access is required.");
+        return;
+      }
+      try {
+        if (isFirebaseConfigured) await repoUpdateOrderStatus(orderId, status);
+        setOrders((o) => o.map((x) => (x.id === orderId ? { ...x, status } : x)));
+        toast("success", `Order ${orderId} → ${status}`);
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+      }
     },
-    [toast]
+    [isAdmin, toast]
   );
+
+  const refreshOrderTracking = useCallback(async (orderId: string) => {
+    try {
+      const refreshed = await repoRefreshOrderTracking(orderId);
+      setOrders((current) => current.map((order) => order.id === orderId ? refreshed : order));
+      toast("success", "Tracking updated.");
+    } catch (err) {
+      toast("error", toFriendlyFirebaseError(err));
+    }
+  }, [toast]);
+
+  const assignDelhiveryWaybill = useCallback(async (orderId: string, awb: string) => {
+    if (!isAdmin) {
+      toast("error", "Administrator access is required.");
+      return;
+    }
+    try {
+      const updated = await repoAssignDelhiveryWaybill(orderId, awb);
+      setOrders((current) => current.map((order) => order.id === orderId ? updated : order));
+      toast("success", "Delhivery tracking assigned.");
+    } catch (err) {
+      toast("error", toFriendlyFirebaseError(err));
+    }
+  }, [isAdmin, toast]);
 
 /* product CRUD */
   const addProduct = useCallback(
-    (p: Omit<Product, "id" | "createdAt">) => {
-      const product: Product = { ...p, id: uid(), createdAt: Date.now() };
-      setProducts((list) => [product, ...list]);
-      if (isFirebaseConfigured) void repoUpsertProduct(product);
-      toast("success", `${p.name} added.`);
+    async (p: Omit<Product, "id" | "createdAt">) => {
+      try {
+        const persisted = isFirebaseConfigured ? await repoUpsertProduct(p) : null;
+        const product: Product = persisted ?? { ...p, id: uid(), createdAt: Date.now() };
+        setProducts((list) => [product, ...list]);
+        toast("success", `${p.name} added.`);
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+        throw err;
+      }
     },
     [toast]
   );
 const updateProduct = useCallback(
-    (id: string, patch: Partial<Product>) => {
-      setProducts((list) => list.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-      if (isFirebaseConfigured) {
-        const current = products.find((p) => p.id === id);
-        if (current) void repoUpsertProduct({ ...current, ...patch, id });
+    async (id: string, patch: Partial<Product>) => {
+      const current = products.find((p) => p.id === id);
+      if (!current) return;
+      try {
+        if (isFirebaseConfigured) await repoUpsertProduct({ ...current, ...patch, id });
+        setProducts((list) => list.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+        toast("success", "Product updated.");
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+        throw err;
       }
-      toast("success", "Product updated.");
     },
     [toast, products]
   );
   const deleteProduct = useCallback(
-    (id: string) => {
-      setProducts((list) => list.filter((p) => p.id !== id));
-      if (isFirebaseConfigured) void repoDeleteProduct(id);
-      toast("info", "Product deleted.");
+    async (id: string) => {
+      try {
+        if (isFirebaseConfigured) await repoDeleteProduct(id);
+        setProducts((list) => list.filter((p) => p.id !== id));
+        toast("info", "Product deleted.");
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+        throw err;
+      }
     },
     [toast]
   );
@@ -420,6 +540,7 @@ const updateProduct = useCallback(
     products,
     user,
     isAdmin,
+    isAuthReady,
     cart,
     orders,
     toasts,
@@ -436,6 +557,8 @@ const updateProduct = useCallback(
     cartCount,
     placeOrder,
     updateOrderStatus,
+    refreshOrderTracking,
+    assignDelhiveryWaybill,
     addProduct,
     updateProduct,
     deleteProduct,

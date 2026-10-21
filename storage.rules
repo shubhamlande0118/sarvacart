@@ -16,18 +16,24 @@ service firebase.storage {
     // Product images — only admins can upload/manage.
     match /products/{productId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.token.admin == true;
+      allow create, update: if request.auth != null && request.auth.token.admin == true
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null && request.auth.token.admin == true;
     }
 
     // Profile photos — only the owning user can upload/manage their own.
     match /profilePhotos/{userId}/{fileName} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
     // Fallback: deny everything else not explicitly allowed above.
     match /{allPaths=**} {
-      allow read: if true;
+      allow read: if false;
       allow write: if false;
     }
   }

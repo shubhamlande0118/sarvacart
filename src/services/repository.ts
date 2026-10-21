@@ -22,10 +22,10 @@ import {
   reduceStock,
 } from "./products";
 import {
-  createOrder,
   updateOrderStatus,
   fetchOrdersByUser,
   fetchAllOrders,
+  subscribeToUserOrders,
 } from "./orders";
 import {
   createUserProfile,
@@ -35,6 +35,8 @@ import {
 import type { ProductRecord, UserProfile, OrderRecord } from "./types";
 import type { Product } from "../data/seed";
 import type { Order, OrderStatus, User } from "./storeService";
+import { httpsCallable } from "firebase/functions";
+import { getFunctionsInstance } from "./firebase";
 
 /* ------------------------------ Mappers ------------------------------ */
 
@@ -106,37 +108,17 @@ function toOrder(record: OrderRecord): Order {
     total: record.total,
     payment: record.payment,
     status: record.status as OrderStatus,
+    shipment: record.shipment
+      ? {
+          awb: record.shipment.awb,
+          courier: record.shipment.courier,
+          status: record.shipment.status,
+          trackingUrl: `https://www.delhivery.com/track/package/${encodeURIComponent(record.shipment.awb)}`,
+          timeline: record.shipment.timeline,
+          updatedAt: record.shipment.updatedAt,
+        }
+      : undefined,
     createdAt: record.createdAt,
-  };
-}
-
-/** UI Order -> Firestore OrderRecord body */
-function toOrderRecord(order: Order): Omit<OrderRecord, "id" | "createdAt" | "updatedAt"> {
-  return {
-    orderNumber: order.id,
-    userId: order.userId,
-    customer: {
-      name: order.customer.name,
-      email: order.customer.email,
-      phone: order.customer.phone,
-      address: order.customer.address,
-    },
-    items: order.items.map((it) => ({
-      productId: it.productId,
-      name: it.name,
-      image: it.image,
-      price: it.price,
-      qty: it.qty,
-      size: it.size,
-      color: it.color,
-    })),
-    subtotal: order.subtotal,
-    discount: order.discount,
-    delivery: order.delivery,
-    tax: 0,
-    total: order.total,
-    payment: order.payment,
-    status: order.status as OrderRecord["status"],
   };
 }
 
@@ -162,15 +144,16 @@ export async function repoGetProduct(id: string): Promise<Product | null> {
 
 export async function repoUpsertProduct(
   p: Omit<Product, "id" | "createdAt"> & { id?: string }
-): Promise<void> {
-  if (!isFirebaseConfigured) return;
+): Promise<Product | null> {
+  if (!isFirebaseConfigured) return null;
   const record = toProductRecord({ ...(p as Product), id: p.id ?? "", createdAt: Date.now() });
   if (p.id) {
     const { id, ...rest } = record;
     await updateProduct(id, rest);
+    return toProduct(record);
   } else {
     const { id: _id, ...rest } = record;
-    await createProduct(rest);
+    return toProduct(await createProduct(rest));
   }
 }
 
@@ -231,9 +214,60 @@ export async function repoUpdateUser(
 
 /* ------------------------------ Orders ------------------------------ */
 
-export async function repoPlaceOrder(order: Order): Promise<void> {
-  if (!isFirebaseConfigured) return;
-  await createOrder(toOrderRecord(order));
+export async function repoPlaceOrder(
+  order: Order
+): Promise<Order> {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+  if (order.payment !== "Cash on Delivery" || !order.userId) {
+    throw new Error("Only authenticated Cash on Delivery orders are supported.");
+  }
+  const { getCurrentIdToken } = await import("./auth");
+  const token = await getCurrentIdToken();
+  const result = await fetch("/api/orders/create", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": crypto.randomUUID(),
+    },
+    body: JSON.stringify({
+      customer: order.customer,
+      payment: "Cash on Delivery",
+      items: order.items.map((item) => ({
+        productId: item.productId,
+        qty: item.qty,
+        ...(item.size ? { size: item.size } : {}),
+        ...(item.color ? { color: item.color } : {}),
+      })),
+    }),
+  });
+  const payload = await result.json() as {
+    order?: {
+      orderId: string;
+      orderNumber: string;
+      status: Order["status"];
+      total: number;
+      payment: Order["payment"];
+      customer: { name: string };
+    };
+    error?: string;
+  };
+  if (!result.ok || !payload.order) throw new Error(payload.error ?? "Unable to create the order.");
+  // The server is authoritative for monetary values and status. The client's
+  // validated input supplies the line items and customer contact details.
+  return {
+    id: payload.order.orderId,
+    userId: order.userId,
+    customer: { ...order.customer, name: payload.order.customer.name },
+    items: order.items,
+    subtotal: order.subtotal,
+    discount: order.discount,
+    delivery: order.delivery,
+    total: payload.order.total,
+    payment: payload.order.payment,
+    status: payload.order.status,
+    createdAt: order.createdAt,
+  };
 }
 
 export async function repoUpdateOrderStatus(
@@ -255,6 +289,41 @@ export async function repoGetAllOrders(): Promise<Order[]> {
   if (!isFirebaseConfigured) return [];
   const records = await fetchAllOrders();
   return records.map(toOrder);
+}
+
+export function repoSubscribeOrdersForUser(
+  userId: string,
+  onData: (orders: Order[]) => void,
+  onError: (error: Error) => void,
+): () => void {
+  if (!isFirebaseConfigured) return () => undefined;
+  return subscribeToUserOrders(
+    userId,
+    (records) => onData(records.map(toOrder)),
+    onError,
+  );
+}
+
+/** Gets a fresh server-side Delhivery scan without exposing its API token. */
+export async function repoRefreshOrderTracking(orderId: string): Promise<Order> {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+  const refreshTracking = httpsCallable<{ orderId: string }, { order: Order }>(
+    getFunctionsInstance(),
+    "refreshDelhiveryTracking"
+  );
+  const result = await refreshTracking({ orderId });
+  return result.data.order;
+}
+
+/** Admin-only: attach a waybill created in Delhivery One to an order. */
+export async function repoAssignDelhiveryWaybill(orderId: string, awb: string): Promise<Order> {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+  const assignWaybill = httpsCallable<{ orderId: string; awb: string }, { order: Order }>(
+    getFunctionsInstance(),
+    "assignDelhiveryWaybill"
+  );
+  const result = await assignWaybill({ orderId, awb });
+  return result.data.order;
 }
 
 export { isFirebaseConfigured };

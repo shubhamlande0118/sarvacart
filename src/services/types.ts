@@ -116,6 +116,7 @@ export type OrderStatus =
   | "Picked Up"
   | "In Transit"
   | "Out For Delivery"
+  | "Shipped"
   | "Delivered"
   | "Cancelled";
 

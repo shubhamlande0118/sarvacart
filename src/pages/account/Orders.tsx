@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Package, ChevronRight } from "lucide-react";
+import { Package, ChevronRight, MapPin } from "lucide-react";
 import { useStore, formatINR, type OrderStatus } from "../../lib/store";
 import { Button, Page } from "../../components/ui";
 import { cn } from "../../utils/cn";
@@ -8,13 +8,17 @@ const statusColor: Record<OrderStatus, string> = {
   "Pending Confirmation": "bg-amber-500/15 text-amber-300",
   Pending: "bg-amber-500/15 text-amber-300",
   Processing: "bg-blue-500/15 text-blue-300",
+  Packed: "bg-cyan-500/15 text-cyan-300",
+  "Picked Up": "bg-indigo-500/15 text-indigo-300",
+  "In Transit": "bg-violet-500/15 text-violet-300",
+  "Out For Delivery": "bg-fuchsia-500/15 text-fuchsia-300",
   Shipped: "bg-violet-500/15 text-violet-300",
   Delivered: "bg-emerald-500/15 text-emerald-300",
   Cancelled: "bg-red-500/15 text-red-300",
 };
 
 export default function Orders() {
-  const { orders, user } = useStore();
+  const { orders, user, refreshOrderTracking } = useStore();
   const mine = orders.filter((o) => o.userId === user?.id);
 
   return (
@@ -74,12 +78,27 @@ export default function Orders() {
                 ))}
               </div>
 
-              <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4">
+                <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4">
                 <span className="flex items-center gap-1 text-sm text-zinc-400">
                   {o.payment} <ChevronRight className="h-4 w-4" />
                 </span>
-                <span className="text-lg font-semibold text-gradient-gold">{formatINR(o.total)}</span>
+                <div className="flex items-center gap-4">
+                  <span className="text-lg font-semibold text-gradient-gold">{formatINR(o.total)}</span>
+                  <Button to={`/account/orders/${o.id}`} variant="outline" size="sm">View details</Button>
+                </div>
               </div>
+              {o.shipment && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
+                  <span className="flex items-center gap-1.5 text-zinc-400">
+                    <MapPin className="h-4 w-4 text-gold-soft" />
+                    {o.shipment.courier} · {o.shipment.awb} · {o.shipment.status}
+                  </span>
+                  <div className="flex gap-3">
+                    <button onClick={() => void refreshOrderTracking(o.id)} className="text-gold-soft hover:underline">Refresh tracking</button>
+                    <a href={o.shipment.trackingUrl} target="_blank" rel="noreferrer" className="text-gold-soft hover:underline">Open Delhivery</a>
+                  </div>
+                </div>
+              )}
             </motion.div>
           ))}
         </div>

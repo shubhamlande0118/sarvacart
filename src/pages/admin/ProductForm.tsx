@@ -35,7 +35,7 @@ export default function ProductForm() {
     setForm({ ...form, images: imgs });
   };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     const images = form.images.map((s) => s.trim()).filter(Boolean);
@@ -59,9 +59,13 @@ export default function ProductForm() {
       colors: form.colors ? form.colors.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
     };
 
-    if (existing) updateProduct(existing.id, payload);
-    else addProduct(payload);
-    navigate("/admin/products");
+    try {
+      if (existing) await updateProduct(existing.id, payload);
+      else await addProduct(payload);
+      navigate("/admin/products");
+    } catch {
+      setError("Could not save the product. Please try again.");
+    }
   };
 
   return (

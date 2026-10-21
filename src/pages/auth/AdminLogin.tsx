@@ -65,12 +65,6 @@ export default function AdminLogin() {
           </Button>
         </form>
 
-        <div className="mt-6 rounded-xl border border-gold/20 bg-gold/5 p-4 text-xs text-zinc-400">
-<p className="font-semibold text-gold-soft">Demo credentials</p>
-          <p className="mt-1">Email: admin@sarvacart.store</p>
-          <p>Password: Admin@123</p>
-        </div>
-
         <Link to="/login" className="mt-5 block text-center text-sm text-zinc-400 hover:text-gold-soft">
           ← Back to user login
         </Link>

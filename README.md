@@ -2,7 +2,7 @@
 
 A premium, cinematic, mobile-first e-commerce experience built with **React + Vite + Tailwind CSS v4 + Framer Motion**. Dark luxury theme, glassmorphism, parallax scrolling, 3D-style product storytelling, real authentication, full cart & order flow, and a complete admin dashboard with product CRUD.
 
-> This build runs entirely in the browser using an encapsulated data layer persisted to `localStorage`, so it is instantly demoable and deployable as a static site. The data layer (`src/lib/store.tsx`) is written as a clean service boundary — every function maps 1:1 to a REST/Next.js API route, so swapping to a real backend is straightforward (see **Going to Production** below).
+> SarvaCart uses Firebase Authentication and Firestore when `VITE_FIREBASE_*` variables are configured, with a localStorage fallback for offline demos. COD checkout uses the `placeCodOrder` Cloud Function so pricing and inventory are trusted on the server.
 
 ---
 
@@ -22,15 +22,11 @@ A premium, cinematic, mobile-first e-commerce experience built with **React + Vi
 
 ---
 
-## 🔑 Demo Logins
+## 🔑 Accounts
 
-**Admin** (Admin Portal → `/#/admin/login`)
-```
-Email:    admin@sarvacart.store
-Password: Admin@123
-```
-
-**User** — create any account via **Sign Up**, or log in after registering.
+Create user accounts through **Sign Up**. Admin access requires a Firebase custom
+claim and is configured by a project owner; credentials are never hardcoded in
+the frontend.
 
 ---
 
@@ -56,17 +52,21 @@ The app is output as a single self-contained `dist/index.html` (via `vite-plugin
 
 ## 🌐 Deployment
 
-- **Vercel / Netlify:** Build command `npm run build`, output dir `dist`.
-- **Static host (S3, GitHub Pages, etc.):** upload `dist/index.html`.
-- Routing uses `HashRouter`, so deep links work on any static host without server config.
+- **Vercel:** Build command `npm run build`, output dir `dist`. The included `vercel.json` rewrites all non-`/api/*` requests to `/index.html`, which is required for direct navigation to nested `BrowserRouter` routes (e.g. `/shop/:category`, `/product/:id`, `/account/orders/:id`).
+- **Static host (S3, GitHub Pages, etc.):** upload `dist/index.html` and configure a SPA fallback to `index.html` for all routes.
+- Routing uses `BrowserRouter` (see `src/App.tsx`), not `HashRouter`. A `HashRedirectHandler` migrates legacy `#/` hash URLs to path-based routes.
 
 ---
 
-## 🛠 Going to Production (real backend)
+## Architecture
 
-The provided store is a drop-in service layer backed by Firebase. When `VITE_FIREBASE_*` env vars are
-present, the repository layer (`src/services/repository.ts`) transparently syncs to Firestore; otherwise
-the app falls back to localStorage. See **Production Deployment** below for the complete Firebase setup.
+The repository layer is the persistence boundary. Firebase Auth owns sessions,
+Firestore stores profiles, products and orders, and the browser stores only the
+cart/demo fallback. COD orders are authenticated and sent to `POST /api/orders/create`
+on Vercel, which recomputes prices and reserves stock in one trusted Firestore
+transaction before returning a minimal confirmation. Cloud Functions require the
+Blaze plan and are optional. Without Firebase configuration, the localStorage
+fallback remains suitable only for offline UI demos.
 
 ---
 
@@ -79,14 +79,14 @@ for the full step-by-step guide.
 
 ```bash
 # 1. Configure environment
-cp .env.example .env.local      # fill in VITE_FIREBASE_* + FIREBASE_SERVICE_ACCOUNT
+cp .env.example .env.local      # fill in VITE_FIREBASE_* values
 
 # 2. Install Firebase CLI & log in
 npm install -g firebase-tools
 firebase login
 
-# 3. Deploy security rules, indexes, and storage rules
-firebase deploy --only firestore:rules,firestore:indexes,storage
+# 3. Deploy Spark-supported rules and indexes
+firebase deploy --only firestore:rules,firestore:indexes
 
 # 4. Seed data + bootstrap the first admin (idempotent)
 npm install
@@ -106,11 +106,25 @@ firebase deploy --only hosting
 | [`storage.rules`](./storage.rules) | Admin product uploads, user profile photos |
 | [`firestore.indexes.json`](./firestore.indexes.json) | Composite indexes for products & orders |
 | [`firebase.json`](./firebase.json) | Firebase CLI config (rules, indexes, hosting) |
+| [`vercel.json`](./vercel.json) | Vercel routing: SPA fallback + `/api/*` Node.js runtime |
 | [`scripts/seed.ts`](./scripts/seed.ts) | Idempotent seeder + admin bootstrap |
 | [`.env.example`](./.env.example) | All environment variables |
 
-**Admin:** `admin@sarvacart.store` (created via `npm run seed:admin`; set a real password in the
-Firebase console → Authentication → Users).
+Storage initialization and deployment are separate Firebase Console actions.
+Cloud Functions and Delhivery tracking require Blaze; they are not required for
+Spark authentication, catalog, cart, COD order creation or order history.
+
+## API routes vs Cloud Functions
+
+- **Vercel API** (`api/orders/create.ts`): the actively used COD checkout
+  endpoint. Runs on the `nodejs20.x` runtime, verifies the Firebase ID token,
+  recomputes pricing/stock inside a Firestore transaction, and returns a safe,
+  minimal order confirmation to the customer.
+- **Cloud Functions** (`functions/src/index.ts`): separate optional functions
+  (`placeCodOrder`, `assignDelhiveryWaybill`, `refreshDelhiveryTracking`) that
+  require the Blaze plan to deploy. They are **not** used by the default
+  checkout flow unless you explicitly wire the frontend to them. Deploy only
+  when strict transactional inventory or Delhivery tracking is required.
 
 ---
 

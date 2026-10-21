@@ -5,7 +5,12 @@ import { cn } from "../../utils/cn";
 
 const allStatus: OrderStatus[] = [
   "Pending Confirmation",
+  "Pending",
   "Processing",
+  "Packed",
+  "Picked Up",
+  "In Transit",
+  "Out For Delivery",
   "Shipped",
   "Delivered",
   "Cancelled",
@@ -14,14 +19,19 @@ const statusColor: Record<OrderStatus, string> = {
   "Pending Confirmation": "bg-amber-500/15 text-amber-300",
   Pending: "bg-amber-500/15 text-amber-300",
   Processing: "bg-blue-500/15 text-blue-300",
+  Packed: "bg-cyan-500/15 text-cyan-300",
+  "Picked Up": "bg-indigo-500/15 text-indigo-300",
+  "In Transit": "bg-violet-500/15 text-violet-300",
+  "Out For Delivery": "bg-fuchsia-500/15 text-fuchsia-300",
   Shipped: "bg-violet-500/15 text-violet-300",
   Delivered: "bg-emerald-500/15 text-emerald-300",
   Cancelled: "bg-red-500/15 text-red-300",
 };
 
 export default function AdminOrders() {
-  const { orders, updateOrderStatus } = useStore();
+  const { orders, updateOrderStatus, assignDelhiveryWaybill } = useStore();
   const [filter, setFilter] = useState<OrderStatus | "all">("all");
+  const [waybills, setWaybills] = useState<Record<string, string>>({});
 
   const list = filter === "all" ? orders : orders.filter((o) => o.status === filter);
 
@@ -91,6 +101,25 @@ export default function AdminOrders() {
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
+                {o.shipment ? (
+                  <span className="text-sm text-zinc-300">Delhivery AWB: {o.shipment.awb}</span>
+                ) : (
+                  <>
+                    <input
+                      value={waybills[o.id] ?? ""}
+                      onChange={(e) => setWaybills((current) => ({ ...current, [o.id]: e.target.value }))}
+                      placeholder="Delhivery AWB"
+                      inputMode="numeric"
+                      className="w-44 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600"
+                    />
+                    <button
+                      onClick={() => void assignDelhiveryWaybill(o.id, waybills[o.id] ?? "")}
+                      className="rounded-xl bg-gold/15 px-3 py-2 text-sm text-gold-soft transition hover:bg-gold/25"
+                    >
+                      Add tracking
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}

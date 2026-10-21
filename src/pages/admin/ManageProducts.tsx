@@ -86,9 +86,13 @@ export default function ManageProducts() {
             <div className="mt-6 flex gap-3">
               <Button variant="dark" full onClick={() => setConfirm(null)}>Cancel</Button>
               <button
-                onClick={() => {
-                  deleteProduct(confirm);
-                  setConfirm(null);
+                onClick={async () => {
+                  try {
+                    await deleteProduct(confirm);
+                    setConfirm(null);
+                  } catch {
+                    // The store reports the persistence error.
+                  }
                 }}
                 className="w-full rounded-full bg-red-500/90 py-3 text-sm font-medium text-white transition hover:bg-red-500"
               >

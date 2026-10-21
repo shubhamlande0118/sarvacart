@@ -18,7 +18,7 @@ import {
   updateDoc,
   type DocumentData,
 } from "firebase/firestore";
-import { getAuthInstance, getFirestoreInstance } from "./firebase";
+import { getFirestoreInstance, initializeAuth } from "./firebase";
 import type { UserProfile } from "./types";
 
 const usersCollection = "users";
@@ -29,7 +29,7 @@ function toUserProfile(uid: string, fb: FirebaseUser, role: "user" | "admin" = "
     name: fb.displayName ?? "",
     email: fb.email ?? "",
     phone: "",
-    avatarUrl: fb.photoURL ?? undefined,
+    ...(fb.photoURL ? { avatarUrl: fb.photoURL } : {}),
     role,
     createdAt: Date.now(),
     onboarded: false,
@@ -60,7 +60,7 @@ export async function signUpWithEmail(
   email: string,
   password: string
 ): Promise<FirebaseUser> {
-  const auth = getAuthInstance();
+  const auth = await initializeAuth();
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(cred.user, { displayName: name });
   await sendEmailVerification(cred.user);
@@ -69,13 +69,19 @@ export async function signUpWithEmail(
 }
 
 export async function logInWithEmail(email: string, password: string): Promise<FirebaseUser> {
-  const auth = getAuthInstance();
+  const auth = await initializeAuth();
   const cred = await signInWithEmailAndPassword(auth, email, password);
   return cred.user;
 }
 
+export async function getCurrentIdToken(): Promise<string> {
+  const auth = await initializeAuth();
+  if (!auth.currentUser) throw new Error("Please sign in to continue.");
+  return auth.currentUser.getIdToken();
+}
+
 export async function logInWithGoogle(): Promise<FirebaseUser> {
-  const auth = getAuthInstance();
+  const auth = await initializeAuth();
   const provider = new GoogleAuthProvider();
   const cred = await signInWithPopup(auth, provider);
   const fb = cred.user;
@@ -87,30 +93,35 @@ export async function logInWithGoogle(): Promise<FirebaseUser> {
 }
 
 export async function logOut(): Promise<void> {
-  const auth = getAuthInstance();
+  const auth = await initializeAuth();
   await signOut(auth);
 }
 
 export async function resetPassword(email: string): Promise<void> {
-  const auth = getAuthInstance();
+  const auth = await initializeAuth();
   await sendPasswordResetEmail(auth, email);
 }
 
 export async function verifyEmail(): Promise<void> {
-  const auth = getAuthInstance();
+  const auth = await initializeAuth();
   const current = auth.currentUser;
   if (!current) throw new Error("No signed-in user.");
   await sendEmailVerification(current);
 }
 
 export async function changePassword(newPassword: string): Promise<void> {
-  const auth = getAuthInstance();
+  const auth = await initializeAuth();
   const current = auth.currentUser;
   if (!current) throw new Error("No signed-in user.");
   await updatePassword(current, newPassword);
 }
 
-export function onAuthStateChange(callback: (user: FirebaseUser | null) => void) {
-  const auth = getAuthInstance();
+export async function getAdminClaim(user: FirebaseUser): Promise<boolean> {
+  const token = await user.getIdTokenResult();
+  return token.claims.admin === true;
+}
+
+export async function onAuthStateChange(callback: (user: FirebaseUser | null) => void) {
+  const auth = await initializeAuth();
   return onAuthStateChanged(auth, callback);
 }

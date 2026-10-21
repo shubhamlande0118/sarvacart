@@ -1,5 +1,5 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
+import { browserLocalPersistence, getAuth, setPersistence, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 import { getFunctions, type Functions } from "firebase/functions";
@@ -23,6 +23,7 @@ let auth: Auth | null = null;
 let db: Firestore | null = null;
 let storage: FirebaseStorage | null = null;
 let functions: Functions | null = null;
+let authInitialization: Promise<Auth> | null = null;
 
 /** Typed error for Firebase initialization/config failures. */
 export class FirebaseSetupError extends Error {
@@ -85,6 +86,19 @@ export function getAuthInstance(): Auth {
   return auth;
 }
 
+/**
+ * Configure persistence before the application begins resolving auth state.
+ * The promise is shared so every consumer uses the same Auth instance and
+ * cannot race a second persistence configuration.
+ */
+export function initializeAuth(): Promise<Auth> {
+  if (!authInitialization) {
+    const instance = getAuthInstance();
+    authInitialization = setPersistence(instance, browserLocalPersistence).then(() => instance);
+  }
+  return authInitialization;
+}
+
 export function getFirestoreInstance(): Firestore {
   requireConfig();
   if (!db) db = getFirestore(getFirebaseApp());
@@ -99,6 +113,6 @@ export function getStorageInstance(): FirebaseStorage {
 
 export function getFunctionsInstance(): Functions {
   requireConfig();
-  if (!functions) functions = getFunctions(getFirebaseApp());
+  if (!functions) functions = getFunctions(getFirebaseApp(), "asia-south1");
   return functions;
 }

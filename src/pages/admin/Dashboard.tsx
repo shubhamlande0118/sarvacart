@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { IndianRupee, Users, Package, ShoppingCart, TrendingUp } from "lucide-react";
+import { IndianRupee, Package, ShoppingCart, TrendingUp } from "lucide-react";
 import { useStore, formatINR, type OrderStatus } from "../../lib/store";
 import { cn } from "../../utils/cn";
 
@@ -8,23 +8,17 @@ const statusColor: Record<OrderStatus, string> = {
   "Pending Confirmation": "bg-amber-500/15 text-amber-300",
   Pending: "bg-amber-500/15 text-amber-300",
   Processing: "bg-blue-500/15 text-blue-300",
+  Packed: "bg-cyan-500/15 text-cyan-300",
+  "Picked Up": "bg-indigo-500/15 text-indigo-300",
+  "In Transit": "bg-violet-500/15 text-violet-300",
+  "Out For Delivery": "bg-fuchsia-500/15 text-fuchsia-300",
   Shipped: "bg-violet-500/15 text-violet-300",
   Delivered: "bg-emerald-500/15 text-emerald-300",
   Cancelled: "bg-red-500/15 text-red-300",
 };
 
-function read<T>(key: string, fb: T): T {
-  try {
-    const v = localStorage.getItem(key);
-    return v ? (JSON.parse(v) as T) : fb;
-  } catch {
-    return fb;
-  }
-}
-
 export default function Dashboard() {
   const { products, orders } = useStore();
-const users = read<unknown[]>("sarvacart.users", []);
 
   const totalSales = orders
     .filter((o) => o.status !== "Cancelled")
@@ -34,7 +28,6 @@ const users = read<unknown[]>("sarvacart.users", []);
     { label: "Total Sales", value: formatINR(totalSales), icon: IndianRupee, color: "text-emerald-400" },
     { label: "Total Orders", value: orders.length, icon: ShoppingCart, color: "text-blue-400" },
     { label: "Total Products", value: products.length, icon: Package, color: "text-gold-soft" },
-    { label: "Total Users", value: users.length, icon: Users, color: "text-violet-400" },
   ];
 
   const recent = orders.slice(0, 6);

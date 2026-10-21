@@ -2,22 +2,23 @@ import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
 import { useStore, formatINR } from "../lib/store";
+import { computeOrderTotals } from "../lib/pricing";
 import { categories } from "../data/seed";
 import { Button, Page } from "../components/ui";
 
 export default function Cart() {
   const { cart, products, setQty, removeFromCart } = useStore();
 
-  const lines = cart.map((c) => {
-    const product = products.find((p) => p.id === c.productId)!;
-    return { ...c, product };
+  const lines = cart.flatMap((c) => {
+    const product = products.find((p) => p.id === c.productId);
+    return product ? [{ ...c, product }] : [];
   });
+  const unavailableItems = cart.filter((c) => !products.some((p) => p.id === c.productId));
+  const hasUnavailableItems = lines.length !== cart.length;
 
-  const subtotal = lines.reduce((s, l) => s + l.product.price * l.qty, 0);
-  const discounted = lines.reduce((s, l) => s + l.product.discountPrice * l.qty, 0);
-  const discount = subtotal - discounted;
-  const delivery = discounted > 50000 || discounted === 0 ? 0 : 499;
-  const total = discounted + delivery;
+  const { subtotal, discount, delivery, total } = computeOrderTotals(
+    lines.map((l) => ({ price: l.product.price, discountPrice: l.product.discountPrice, qty: l.qty })),
+  );
 
   if (cart.length === 0) {
     return (
@@ -44,10 +45,26 @@ export default function Cart() {
     <Page className="mx-auto max-w-7xl px-4 pb-24 pt-28 sm:px-6">
       <h1 className="font-serif text-4xl font-bold text-white sm:text-5xl">Shopping Cart</h1>
       <p className="mt-2 text-zinc-400">{cart.length} item{cart.length > 1 ? "s" : ""} in your bag</p>
+      {hasUnavailableItems && (
+        <p className="mt-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          Some items are no longer available. Remove them before checkout.
+        </p>
+      )}
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_380px]">
         <div className="space-y-4">
           <AnimatePresence>
+            {unavailableItems.map((item) => (
+              <div key={item.productId + item.size + item.color} className="glass flex items-center justify-between gap-4 rounded-2xl p-4">
+                <p className="text-sm text-red-300">An item in your cart is no longer available.</p>
+                <button
+                  onClick={() => removeFromCart(item)}
+                  className="shrink-0 rounded-lg border border-red-400/30 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
             {lines.map((l) => {
               const cat = categories.find((c) => c.slug === l.product.category);
               return (
@@ -139,7 +156,7 @@ export default function Cart() {
                 <dd className="text-gradient-gold">{formatINR(total)}</dd>
               </div>
             </dl>
-            <Button to="/checkout" full size="lg" className="mt-6">
+            <Button to={hasUnavailableItems ? "/cart" : "/checkout"} full size="lg" className="mt-6">
               Checkout <ArrowRight className="h-4 w-4" />
             </Button>
             <Link to="/shop" className="mt-4 block text-center text-sm text-zinc-400 hover:text-gold-soft">

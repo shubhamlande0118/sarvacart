@@ -1,7 +1,8 @@
 # SarvaCart — Firebase Production Deployment Guide
 
-This guide walks you through taking SarvaCart from a localStorage demo to a
-production system backed by Firebase (Auth + Firestore + Storage + Hosting).
+This guide walks through deploying SarvaCart with Firebase Auth + Firestore +
+Hosting on Spark. Storage is optional, and Cloud Functions are optional Blaze
+infrastructure for server-side inventory reservation and Delhivery tracking.
 Existing application code is **not** modified — you only add the backend
 configuration files already present in this repo:
 
@@ -64,7 +65,9 @@ This uploads `firestore.rules`. Access model:
 
 - **Public read:** `products`, `categories`, `settings`.
 - **Owner-only read/write:** `users`, `cart`, `wishlist`, `addresses` (doc id == `request.auth.uid`).
-- **orders:** owner can read/create their own; admins full access.
+- **orders:** owner can read/create a validated COD snapshot; admins can update
+   status fields only. Spark cannot atomically recompute arbitrary line prices or
+   reserve stock across multiple product documents.
 - **Admin writes:** everything editable by a user with the `admin` custom claim (`request.auth.token.admin == true`).
 
 ---
@@ -154,6 +157,44 @@ client-side routes work. Full deploy of everything at once:
 firebase deploy
 ```
 
+## Vercel checkout API
+
+COD checkout uses `POST /api/orders/create` on Vercel. The API verifies the
+Firebase ID token, reads authoritative products with Firebase Admin SDK, checks
+stock, calculates totals, and creates the order in a Firestore transaction.
+
+Configure `FIREBASE_SERVICE_ACCOUNT` as a server-only Vercel environment
+variable. Do not prefix it with `VITE_`, commit it, or add it to the browser
+bundle. The same variable may be used locally for `vercel dev` and `npm run
+seed`.
+
+The API uses Vercel's Node runtime, while `vercel.json` preserves SPA routes
+without intercepting `/api/*` requests.
+
+## Optional Firebase Functions and Delhivery tracking
+
+SarvaCart keeps the Delhivery API token in Firebase Secret Manager. Never put it
+in `.env.local`, frontend environment variables, or Git.
+
+1. Rotate any token that has been shared outside Delhivery One, then set the
+   replacement interactively:
+   ```bash
+   firebase functions:secrets:set DELHIVERY_API_TOKEN
+   ```
+2. Build and deploy the trusted functions:
+   ```bash
+   npm --prefix functions run build
+   firebase deploy --only functions
+   ```
+3. When a parcel is manifested in Delhivery One, open **Admin → Orders**, enter
+   its Delhivery AWB, and select **Add tracking**. Customers can then refresh
+   live scans from **My Orders**; the API token remains server-side.
+
+Package manifestation is intentionally handled in Delhivery One until the
+merchant's approved pickup location, client name, return address, weights, and
+structured customer city/state/pincode fields are available. Those are required
+by Delhivery's shipment-creation API and must not be guessed.
+
 ---
 
 ## 10. Verify
@@ -161,7 +202,7 @@ firebase deploy
 - Load your hosting URL — the app boots and shows the SarvaCart loading screen.
 - Browse `/shop` — products should load from Firestore (seeded in step 7).
 - Sign up a new user → they appear in the `users` collection.
-- Sign in as `admin@sarvacart.store` at `/#/admin/login` → dashboard loads with admin access.
+- Sign in with an explicitly provisioned custom-claim admin at `/#/admin/login` → dashboard loads with admin access.
 - Try writing to another user's `cart`/`wishlist`/`addresses` from the console is **denied** by rules.
 
 ---
@@ -177,7 +218,7 @@ firebase deploy
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | yes (browser) | app | sender id |
 | `VITE_FIREBASE_APP_ID` | yes (browser) | app | web app id |
 | `VITE_FIREBASE_MEASUREMENT_ID` | no | Analytics | optional |
-| `FIREBASE_SERVICE_ACCOUNT` | yes (seed) | `scripts/seed.ts` | path or inline JSON; **server-only** |
+| `FIREBASE_SERVICE_ACCOUNT` | yes (seed + Vercel API) | `scripts/seed.ts`, `api/orders/create.ts` | inline JSON in Vercel; **server-only** |
 | `RAZORPAY_KEY_ID` | no | Cloud Functions | server-only |
 | `RAZORPAY_KEY_SECRET` | no | Cloud Functions | server-only |
 | `DELHIVERY_API_URL` | no | Cloud Functions | server-only |

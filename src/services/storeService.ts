@@ -7,6 +7,10 @@ export type OrderStatus =
   | "Pending Confirmation"
   | "Pending"
   | "Processing"
+  | "Packed"
+  | "Picked Up"
+  | "In Transit"
+  | "Out For Delivery"
   | "Shipped"
   | "Delivered"
   | "Cancelled";
@@ -17,7 +21,6 @@ export interface User {
   email: string;
   phone?: string;
   address?: string;
-  passwordHash: string;
   createdAt: number;
 }
 
@@ -49,6 +52,14 @@ export interface Order {
   total: number;
   payment: "Cash on Delivery" | "UPI" | "Online Payment";
   status: OrderStatus;
+  shipment?: {
+    awb: string;
+    courier: string;
+    status: string;
+    trackingUrl: string;
+    timeline?: { status: string; at: number }[];
+    updatedAt: number;
+  };
   createdAt: number;
 }
 
@@ -105,8 +116,6 @@ const LS = {
   orders: "sarvacart.orders",
 };
 
-const ADMIN_EMAIL = "admin@sarvacart.store";
-const ADMIN_PASSWORD = "Admin@123";
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -123,15 +132,6 @@ function write(key: string, value: unknown) {
   } catch {
     // ignore
   }
-}
-
-async function hashPassword(password: string): Promise<string> {
-  const salt = "sarvacart::v1";
-  const data = new TextEncoder().encode(salt + password);
-  const buf = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -167,32 +167,12 @@ export function createStoreService(): StoreService {
       write(LS.products, products.filter((p) => p.id !== id));
     },
 
-    async register(name, email, password) {
-      const users = read<User[]>(LS.users, []);
-      const exists = users.some((u) => u.email.toLowerCase() === email.toLowerCase());
-      if (exists) return { ok: false };
-      const newUser: User = {
-        id: uid(),
-        name,
-        email,
-        passwordHash: await hashPassword(password),
-        createdAt: Date.now(),
-      };
-      const next = [...users, newUser];
-      write(LS.users, next);
-      write(LS.session, newUser.id);
-      return { ok: true };
+    async register(_name, _email, _password) {
+      throw new Error("Legacy localStorage registration is disabled. Use Firebase Authentication.");
     },
 
-    async login(email, password) {
-      const users = read<User[]>(LS.users, []);
-      const hash = await hashPassword(password);
-      const found = users.find(
-        (u) => u.email.toLowerCase() === email.toLowerCase() && u.passwordHash === hash
-      );
-      if (!found) return { ok: false };
-      write(LS.session, found.id);
-      return { ok: true };
+    async login(_email, _password) {
+      throw new Error("Legacy localStorage login is disabled. Use Firebase Authentication.");
     },
 
     async logout() {
@@ -200,10 +180,10 @@ export function createStoreService(): StoreService {
     },
 
     async adminLogin(email, password) {
-      if (email.toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-        write(LS.admin, true);
-        return { ok: true };
-      }
+      // Kept only for compatibility with the unused legacy adapter. Admin
+      // authorization is Firebase custom-claim based in StoreContext.
+      void email;
+      void password;
       return { ok: false };
     },
 

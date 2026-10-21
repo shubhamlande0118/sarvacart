@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckCircle2, Banknote, Smartphone, CreditCard, ShoppingBag, Clock } from "lucide-react";
 import { useStore, formatINR, type Order } from "../lib/store";
+import { computeOrderTotals } from "../lib/pricing";
 import { Button, Page } from "../components/ui";
 import { cn } from "../utils/cn";
 
@@ -24,6 +25,7 @@ const payments: PaymentOption[] = [
 export default function Checkout() {
   const { cart, products, user, placeOrder, toast } = useStore();
   const [placed, setPlaced] = useState<Order | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
     name: user?.name ?? "",
@@ -34,12 +36,14 @@ export default function Checkout() {
   const [payment, setPayment] = useState<Order["payment"]>("Cash on Delivery");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const lines = cart.map((c) => ({ ...c, product: products.find((p) => p.id === c.productId)! }));
-  const discounted = lines.reduce((s, l) => s + l.product.discountPrice * l.qty, 0);
-  const subtotal = lines.reduce((s, l) => s + l.product.price * l.qty, 0);
-  const discount = subtotal - discounted;
-  const delivery = discounted > 50000 || discounted === 0 ? 0 : 499;
-  const total = discounted + delivery;
+  const lines = cart.flatMap((c) => {
+    const product = products.find((p) => p.id === c.productId);
+    return product ? [{ ...c, product }] : [];
+  });
+  const hasUnavailableItems = lines.length !== cart.length;
+  const { subtotal, discount, delivery, total } = computeOrderTotals(
+    lines.map((l) => ({ price: l.product.price, discountPrice: l.product.discountPrice, qty: l.qty })),
+  );
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -51,10 +55,16 @@ export default function Checkout() {
     return Object.keys(e).length === 0;
   };
 
-  const submit = (ev: React.FormEvent) => {
+  const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (!validate()) return;
-    const order = placeOrder(form, payment);
+    if (hasUnavailableItems) {
+      toast("error", "One or more cart products are no longer available.");
+      return;
+    }
+    if (!validate() || submitting) return;
+    setSubmitting(true);
+    const order = await placeOrder(form, payment);
+    setSubmitting(false);
     if (order) setPlaced(order);
   };
 
@@ -202,6 +212,11 @@ export default function Checkout() {
           <div className="glass rounded-2xl p-6">
             <h2 className="font-serif text-2xl font-bold text-[#1c1917]">Order Summary</h2>
             <div className="mt-5 max-h-60 space-y-3 overflow-auto pr-1">
+              {hasUnavailableItems && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                  Some cart items are no longer available. Return to your cart to remove them.
+                </p>
+              )}
               {lines.map((l) => (
                 <div key={l.productId + l.size + l.color} className="flex gap-3">
                   <img src={l.product.images[0]} alt="" className="h-16 w-14 rounded-lg object-cover" />
@@ -223,7 +238,9 @@ export default function Checkout() {
                 <dt>Total</dt><dd className="text-gradient-gold">{formatINR(total)}</dd>
               </div>
             </dl>
-            <Button type="submit" full size="lg" className="mt-6">Place Order</Button>
+            <Button type="submit" full size="lg" className="mt-6" disabled={submitting || hasUnavailableItems}>
+              {submitting ? "Placing Order..." : "Place Order"}
+            </Button>
             <Link to="/cart" className="mt-4 block text-center text-sm text-[#665f5a] hover:text-[#b8733b]">
               Back to cart
             </Link>

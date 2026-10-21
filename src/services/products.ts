@@ -126,15 +126,12 @@ export async function deleteProduct(id: string): Promise<void> {
   await deleteDoc(doc(db, "products", id));
 }
 
-export async function reduceStock(lines: { productId: string; qty: number }[]): Promise<void> {
-  const db = getFirestoreInstance();
-  await Promise.all(
-    lines.map(async ({ productId, qty }) => {
-      const ref = doc(db, "products", productId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) return;
-      const current = snap.data().stock ?? 0;
-      await updateDoc(ref, { stock: Math.max(0, current - qty) });
-    })
-  );
+/**
+ * Intentionally unavailable from the browser. A client-side stock decrement
+ * would require product write access and would let a customer alter inventory
+ * independently of checkout. Inventory must be changed by a trusted server
+ * transaction (for example the placeCodOrder callable function).
+ */
+export async function reduceStock(_lines: { productId: string; qty: number }[]): Promise<void> {
+  throw new Error("Inventory updates must be performed by the checkout backend.");
 }

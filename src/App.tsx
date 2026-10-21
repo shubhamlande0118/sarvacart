@@ -1,9 +1,11 @@
 import { useEffect } from "react";
 import {
-  HashRouter,
+  BrowserRouter,
   Routes,
   Route,
+  Navigate,
   useLocation,
+  useNavigate,
 } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { StoreProvider } from "./lib/store";
@@ -22,6 +24,7 @@ import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import AdminLogin from "./pages/auth/AdminLogin";
 import Orders from "./pages/account/Orders";
+import OrderDetails from "./pages/account/OrderDetails";
 import Profile from "./pages/account/Profile";
 import AdminLayout from "./pages/admin/AdminLayout";
 import Dashboard from "./pages/admin/Dashboard";
@@ -35,6 +38,17 @@ function ScrollToTop() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   }, [pathname]);
+  return null;
+}
+
+function HashRedirectHandler() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (window.location.hash.startsWith("#/")) {
+      const path = window.location.hash.slice(1);
+      navigate(path, { replace: true });
+    }
+  }, [navigate]);
   return null;
 }
 
@@ -59,14 +73,17 @@ function AnimatedRoutes() {
         <Route path="/shop/:category" element={<Shop />} />
         <Route path="/product/:id" element={<ProductDetails />} />
         <Route path="/cart" element={<Cart />} />
-        <Route path="/checkout" element={<Checkout />} />
+        <Route path="/checkout" element={<UserRoute><Checkout /></UserRoute>} />
 
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/admin/login" element={<AdminLogin />} />
 
         <Route path="/orders" element={<UserRoute><Orders /></UserRoute>} />
+        <Route path="/account/orders/:id" element={<UserRoute><OrderDetails /></UserRoute>} />
+        <Route path="/orders/:id" element={<UserRoute><OrderDetails /></UserRoute>} />
         <Route path="/profile" element={<UserRoute><Profile /></UserRoute>} />
+        <Route path="/account" element={<Navigate to="/profile" replace />} />
 
         <Route
           path="/admin"
@@ -93,7 +110,8 @@ function AnimatedRoutes() {
 export default function App() {
   return (
     <StoreProvider>
-      <HashRouter>
+      <BrowserRouter>
+        <HashRedirectHandler />
         <ScrollToTop />
         <div className="flex min-h-screen flex-col bg-[radial-gradient(circle_at_top_left,_rgba(184,115,59,0.08),transparent_24%),radial-gradient(circle_at_bottom_right,_rgba(184,115,59,0.06),transparent_22%),#f7f2eb] text-[#1c1917]">
           <Navbar />
@@ -103,7 +121,7 @@ export default function App() {
           <Footer />
         </div>
         <Toaster />
-      </HashRouter>
+      </BrowserRouter>
     </StoreProvider>
   );
 }
