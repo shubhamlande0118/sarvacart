@@ -47,7 +47,7 @@ export default function AdminLogin() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Admin email"
-              className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
+              className="w-full bg-transparent text-sm text-[#1c1917] placeholder:text-[#81756f] outline-none"
             />
           </Field>
           <Field icon={Lock}>
@@ -57,7 +57,7 @@ export default function AdminLogin() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Admin password"
-              className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
+              className="w-full bg-transparent text-sm text-[#1c1917] placeholder:text-[#81756f] outline-none"
             />
           </Field>
           <Button type="submit" full size="lg" disabled={loading}>
