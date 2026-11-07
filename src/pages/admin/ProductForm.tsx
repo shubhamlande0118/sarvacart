@@ -27,7 +27,7 @@ export default function ProductForm() {
   const [error, setError] = useState("");
 
   const inputCls =
-    "w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-gold/50";
+    "w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#1c1917] outline-none transition focus:border-gold/50";
 
   const setImage = (i: number, v: string) => {
     const imgs = [...form.images];

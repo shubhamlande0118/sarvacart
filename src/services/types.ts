@@ -13,10 +13,43 @@ export interface UserProfile {
   email: string;
   phone?: string;
   avatarUrl?: string;
-  role: "user" | "admin";
+  role: "user" | "admin" | "seller";
   createdAt: number;
   /** Set to true when the Firestore profile is created after signup. */
   onboarded: boolean;
+}
+
+/** Firestore: sellers */
+export type SellerStatus = "pending" | "approved" | "rejected" | "suspended";
+
+export interface SellerProfile {
+  id: string;
+  userId: string;
+  storeName: string;
+  businessName?: string;
+  phone?: string;
+  address?: string;
+  storeDescription?: string;
+  storeLogo?: string;
+  storeBanner?: string;
+  contactEmail?: string;
+  status: SellerStatus;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Firestore: seller KYC */
+export type KycStatus = "pending" | "approved" | "rejected";
+
+export interface SellerKyc {
+  id: string;
+  sellerId: string;
+  documentType: string;
+  documentUrl?: string;
+  status: KycStatus;
+  submittedAt: number;
+  reviewedAt?: number;
+  rejectionReason?: string;
 }
 
 /** Firestore: categories */
@@ -57,6 +90,8 @@ export interface ProductRecord {
   description: string;
   brand: string;
   category: string;
+  sellerId: string;
+  sellerName?: string;
   price: number;
   discountPrice: number;
   images: string[];
@@ -69,6 +104,8 @@ export interface ProductRecord {
   featured: boolean;
   createdAt: number;
   active: boolean;
+  status?: "pending" | "approved" | "rejected" | "inactive";
+  rejectionReason?: string;
 }
 
 /** Firestore: cart */
@@ -128,6 +165,8 @@ export interface OrderLine {
   qty: number;
   size?: string;
   color?: string;
+  sellerId?: string;
+  sellerName?: string;
 }
 
 export interface OrderShipment {
@@ -178,6 +217,43 @@ export interface Coupon {
   usedCount: number;
 }
 
+/** Firestore: commission */
+export interface CommissionRecord {
+  id: string;
+  orderId: string;
+  sellerId: string;
+  grossAmount: number;
+  commissionRate: number;
+  commissionAmount: number;
+  sellerAmount: number;
+  status: "pending" | "paid" | "refunded";
+  createdAt: number;
+}
+
+/** Firestore: return/refund */
+export type ReturnStatus =
+  | "REQUESTED"
+  | "APPROVED"
+  | "REJECTED"
+  | "PICKUP_PENDING"
+  | "RECEIVED"
+  | "REFUND_PENDING"
+  | "REFUNDED"
+  | "CLOSED";
+
+export interface ReturnRecord {
+  id: string;
+  orderId: string;
+  userId: string;
+  sellerId: string;
+  productId: string;
+  reason: string;
+  status: ReturnStatus;
+  refundAmount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** Firestore: payments */
 export interface PaymentRecord {
   id: string;
@@ -210,7 +286,7 @@ export interface NotificationRecord {
   createdAt: number;
 }
 
-/** Firestore: settings */
+/** Firestore: settings (central commission config) */
 export interface SettingsRecord {
   id: string;
   key: string;

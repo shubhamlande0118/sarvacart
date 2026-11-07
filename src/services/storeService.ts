@@ -39,10 +39,13 @@ export interface OrderLine {
   qty: number;
   size?: string;
   color?: string;
+  sellerId?: string;
+  sellerName?: string;
 }
 
 export interface Order {
   id: string;
+  orderNumber: string;
   userId: string | null;
   customer: { name: string; email: string; phone: string; address: string };
   items: OrderLine[];
@@ -274,6 +277,7 @@ export function createStoreService(): StoreService {
 
       const order: Order = {
         id: "PG" + Date.now().toString(36).toUpperCase(),
+        orderNumber: "PG" + Date.now().toString(36).toUpperCase(),
         userId: session,
         customer,
         items: lines,

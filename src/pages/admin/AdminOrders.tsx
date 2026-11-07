@@ -95,7 +95,7 @@ export default function AdminOrders() {
                 <select
                   value={o.status}
                   onChange={(e) => updateOrderStatus(o.id, e.target.value as OrderStatus)}
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none [&>option]:bg-[#15151a]"
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-[#1c1917] outline-none [&>option]:bg-[#15151a]"
                 >
                   {allStatus.map((s) => (
                     <option key={s} value={s}>{s}</option>
@@ -110,7 +110,7 @@ export default function AdminOrders() {
                       onChange={(e) => setWaybills((current) => ({ ...current, [o.id]: e.target.value }))}
                       placeholder="Delhivery AWB"
                       inputMode="numeric"
-                      className="w-44 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600"
+                      className="w-44 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-[#1c1917] outline-none placeholder:text-zinc-600"
                     />
                     <button
                       onClick={() => void assignDelhiveryWaybill(o.id, waybills[o.id] ?? "")}

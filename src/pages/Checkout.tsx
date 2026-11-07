@@ -121,7 +121,7 @@ export default function Checkout() {
           value={form[key]}
           onChange={(e) => setForm({ ...form, [key]: e.target.value })}
           className={cn(
-            "w-full resize-none rounded-xl bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-gold/50",
+            "w-full resize-none rounded-xl bg-white/5 px-4 py-3 text-sm text-[#1c1917] outline-none transition focus:border-gold/50 placeholder:text-[#81756f]",
             errors[key] ? "border border-red-500/60" : "border border-white/10"
           )}
         />
@@ -131,7 +131,7 @@ export default function Checkout() {
           value={form[key]}
           onChange={(e) => setForm({ ...form, [key]: e.target.value })}
           className={cn(
-            "w-full rounded-xl bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-gold/50",
+            "w-full rounded-xl bg-white/5 px-4 py-3 text-sm text-[#1c1917] outline-none transition focus:border-gold/50 placeholder:text-[#81756f]",
             errors[key] ? "border border-red-500/60" : "border border-white/10"
           )}
         />

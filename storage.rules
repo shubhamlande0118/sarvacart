@@ -13,13 +13,19 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Product images — only admins can upload/manage.
-    match /products/{productId}/{fileName} {
+    // Product images — sellers can upload their own product images.
+    // Path: products/{sellerId}/{productId}/{fileName}
+    match /products/{sellerId}/{productId}/{fileName} {
       allow read: if true;
-      allow create, update: if request.auth != null && request.auth.token.admin == true
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null && request.auth.token.admin == true;
+      allow create, update: if request.auth != null
+        && request.auth.token.role == "seller"
+        && request.auth.uid == sellerId
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
+      allow delete: if request.auth != null
+        && (request.auth.token.role == "seller"
+          && request.auth.uid == sellerId
+          || request.auth.token.admin == true);
     }
 
     // Profile photos — only the owning user can upload/manage their own.

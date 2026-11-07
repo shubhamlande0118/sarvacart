@@ -40,6 +40,7 @@ export interface ProductQueryOptions {
   maxPrice?: number;
   search?: string;
   featuredOnly?: boolean;
+  status?: "pending" | "approved" | "rejected" | "inactive";
   sortBy?: "latest" | "low" | "high" | "rating";
   pageSize?: number;
   last?: ProductRecord | null;
@@ -48,6 +49,7 @@ export interface ProductQueryOptions {
 function buildConstraints(opts: ProductQueryOptions): QueryConstraint[] {
   const constraints: QueryConstraint[] = [];
   constraints.push(where("active", "==", true));
+  if (opts.status) constraints.push(where("status", "==", opts.status));
   if (opts.category) constraints.push(where("category", "==", opts.category));
   if (opts.brand) constraints.push(where("brand", "==", opts.brand));
   if (opts.minPrice != null) constraints.push(where("discountPrice", ">=", opts.minPrice));

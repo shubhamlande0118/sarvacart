@@ -19,6 +19,7 @@ import {
   type Toast,
   type User,
 } from "../services/storeService";
+import type { SellerProfile, UserProfile } from "../services/types";
 import {
   isFirebaseConfigured,
   repoGetProducts,
@@ -31,6 +32,17 @@ import {
   repoSubscribeOrdersForUser,
   repoRefreshOrderTracking,
   repoAssignDelhiveryWaybill,
+  repoGetSellerByUserId,
+  repoGetAllSellers,
+  repoUpdateSellerStatus,
+  repoUpdateSellerProfile,
+  repoSubmitKyc,
+  repoReviewKyc,
+  repoGetSellerProducts,
+  repoUpsertSellerProduct,
+  repoApproveProduct,
+  repoDeleteSellerProduct,
+  repoGetPendingProducts,
 } from "../services/repository";
 import { toFriendlyFirebaseError } from "./firebaseExports";
 
@@ -49,8 +61,12 @@ export type {
 
 interface StoreState {
   products: Product[];
+  sellerProducts: Product[];
+  pendingProducts: Product[];
   user: User | null;
   isAdmin: boolean;
+  isSeller: boolean;
+  seller: SellerProfile | null;
   isAuthReady: boolean;
   cart: CartItem[];
   orders: Order[];
@@ -64,6 +80,16 @@ interface StoreContextValue extends StoreState {
   logout: () => Promise<void>;
   adminLogin: (email: string, password: string) => Promise<boolean>;
   adminLogout: () => Promise<void>;
+  // seller auth
+  registerSeller: (
+    name: string,
+    email: string,
+    password: string,
+    storeName: string,
+    businessName?: string,
+    phone?: string,
+    address?: string
+  ) => Promise<boolean>;
   updateProfile: (data: Partial<Pick<User, "name" | "phone" | "address">>) => Promise<void>;
   // cart
   addToCart: (productId: string, qty?: number, opts?: { size?: string; color?: string }) => void;
@@ -84,6 +110,31 @@ interface StoreContextValue extends StoreState {
   updateProduct: (id: string, p: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   getProduct: (id: string) => Product | undefined;
+  // sellers (admin)
+  getAllSellers: () => Promise<void>;
+  sellers: SellerProfile[];
+  approveSeller: (sellerId: string, status: "approved" | "rejected" | "suspended") => Promise<void>;
+  // seller KYC
+  submitKyc: (documentType: string, documentUrl?: string) => Promise<void>;
+  reviewKyc: (kycId: string, status: "approved" | "rejected", rejectionReason?: string) => Promise<void>;
+  updateSellerProfile: (patch: Partial<{
+    storeName: string;
+    businessName: string;
+    phone: string;
+    address: string;
+    storeDescription: string;
+    storeLogo: string;
+    storeBanner: string;
+    contactEmail: string;
+  }>) => Promise<void>;
+  // seller products
+  getSellerProducts: () => Promise<void>;
+  addSellerProduct: (p: Omit<Product, "id" | "createdAt" | "sellerId" | "sellerName" | "status">) => Promise<void>;
+  updateSellerProduct: (id: string, patch: Partial<Product>) => Promise<void>;
+  deleteSellerProduct: (id: string) => Promise<void>;
+  // admin product approval
+  getPendingProducts: () => Promise<void>;
+  approveSellerProduct: (productId: string, approved: boolean, rejectionReason?: string) => Promise<void>;
   // toast
   toast: (type: Toast["type"], message: string) => void;
   dismissToast: (id: string) => void;
@@ -120,6 +171,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>(() => read(LS.products, seedProducts));
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSeller, setIsSeller] = useState(false);
+  const [seller, setSeller] = useState<SellerProfile | null>(null);
+  const [sellers, setSellers] = useState<SellerProfile[]>([]);
+  const [sellerProducts, setSellerProducts] = useState<Product[]>([]);
+  const [pendingProducts, setPendingProducts] = useState<Product[]>([]);
   const [isAuthReady, setIsAuthReady] = useState(!isFirebaseConfigured);
   const [cart, setCart] = useState<CartItem[]>(() => read<CartItem[]>(LS.cart, []));
   const [orders, setOrders] = useState<Order[]>([]);
@@ -172,15 +228,33 @@ useEffect(() => write(LS.products, products), [products]);
         if (!firebaseUser) {
           setUser(null);
           setIsAdmin(false);
+          setIsSeller(false);
+          setSeller(null);
           setOrders([]);
           setIsAuthReady(true);
           return;
         }
         try {
-          const [profile, admin] = await Promise.all([
-            repoFetchUser(firebaseUser.uid),
-            getAdminClaim(firebaseUser),
-          ]);
+          let profile: UserProfile | null = null;
+          let admin = false;
+          let sellerProfile: SellerProfile | null = null;
+
+          try {
+            profile = await repoFetchUser(firebaseUser.uid);
+          } catch {
+            profile = null;
+          }
+          try {
+            admin = await getAdminClaim(firebaseUser);
+          } catch {
+            admin = false;
+          }
+          try {
+            sellerProfile = await repoGetSellerByUserId(firebaseUser.uid);
+          } catch {
+            sellerProfile = null;
+          }
+
           if (!active) return;
           setUser({
             id: firebaseUser.uid,
@@ -190,7 +264,10 @@ useEffect(() => write(LS.products, products), [products]);
             address: (profile as (typeof profile & { address?: string }) | null)?.address,
             createdAt: profile?.createdAt || Date.now(),
           });
-          setIsAdmin(admin);
+          const userRole = profile?.role;
+          setIsAdmin(userRole === "admin" || admin);
+          setIsSeller(Boolean(userRole === "seller" || (sellerProfile && sellerProfile.status === "approved")));
+          setSeller(sellerProfile ?? null);
         } catch (err) {
           if (active) reportFirebaseError(err);
         } finally {
@@ -274,14 +351,86 @@ useEffect(() => write(LS.products, products), [products]);
     [toast]
   );
 
+  const registerSeller = useCallback(
+    async (
+      name: string,
+      email: string,
+      password: string,
+      storeName: string,
+      businessName?: string,
+      phone?: string,
+      address?: string
+    ) => {
+      setLoadingAuth(true);
+      try {
+        if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+        const { registerSellerWithEmail } = await import("../services/auth");
+        await registerSellerWithEmail(name, email, password, storeName, businessName, phone, address);
+        toast("success", "Seller account created. Your account is pending admin approval.");
+        return true;
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+        return false;
+      } finally {
+        setLoadingAuth(false);
+      }
+    },
+    [toast]
+  );
+
   const login = useCallback(
     async (email: string, password: string) => {
       setLoadingAuth(true);
       try {
         if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
-        const { logInWithEmail } = await import("../services/auth");
-        await logInWithEmail(email, password);
-        // The auth subscription updates user and protected routes.
+        const { logInWithEmail, getAdminClaim } = await import("../services/auth");
+        const firebaseUser = await logInWithEmail(email, password);
+
+        // Populate auth state immediately from the Firebase credential so that
+        // ProtectedRoute/Checkout sees the authenticated user before navigate()
+        // is called. This prevents a redirect loop where UserRoute reads a stale
+        // `user === null` and sends the customer back to /login.
+        //
+        // Each Firestore read is handled individually so that a single
+        // permission-denied read (e.g. sellers collection for a non-seller
+        // customer) does not block the entire login flow.
+        let profile: UserProfile | null = null;
+        let admin = false;
+        let sellerProfile: SellerProfile | null = null;
+
+        try {
+          profile = await repoFetchUser(firebaseUser.uid);
+        } catch {
+          // Profile read failed (e.g. permissions); fall back to Firebase user data.
+          profile = null;
+        }
+        try {
+          admin = await getAdminClaim(firebaseUser);
+        } catch {
+          admin = false;
+        }
+        try {
+          sellerProfile = await repoGetSellerByUserId(firebaseUser.uid);
+        } catch {
+          // Seller lookup is expected to fail for normal customers who have no
+          // seller profile. Treat as non-seller.
+          sellerProfile = null;
+        }
+
+        setUser({
+          id: firebaseUser.uid,
+          name: profile?.name || firebaseUser.displayName || "Customer",
+          email: profile?.email || firebaseUser.email || "",
+          phone: profile?.phone,
+          address: (profile as (typeof profile & { address?: string }) | null)?.address,
+          createdAt: profile?.createdAt || Date.now(),
+        });
+        const userRole = profile?.role;
+        setIsAdmin(userRole === "admin" || admin);
+        setIsSeller(Boolean(userRole === "seller" || (sellerProfile && sellerProfile.status === "approved")));
+        setSeller(sellerProfile ?? null);
+        setIsAuthReady(true);
+
         toast("success", "Signed in successfully.");
         return true;
       } catch (err) {
@@ -318,6 +467,27 @@ useEffect(() => write(LS.products, products), [products]);
           toast("error", "This account does not have administrator access.");
           return false;
         }
+        // Populate auth state immediately so AdminRoute sees the admin user
+        // before navigate("/admin") is called.
+        let profile: UserProfile | null = null;
+        try {
+          profile = await repoFetchUser(firebaseUser.uid);
+        } catch {
+          // Profile read failed; fall back to Firebase user data.
+          profile = null;
+        }
+        setUser({
+          id: firebaseUser.uid,
+          name: profile?.name || firebaseUser.displayName || "Admin",
+          email: profile?.email || firebaseUser.email || "",
+          phone: profile?.phone,
+          address: (profile as (typeof profile & { address?: string }) | null)?.address,
+          createdAt: profile?.createdAt || Date.now(),
+        });
+        setIsAdmin(true);
+        setIsSeller(false);
+        setSeller(null);
+        setIsAuthReady(true);
         toast("success", "Admin access granted.");
         return true;
       } catch (err) {
@@ -328,6 +498,198 @@ useEffect(() => write(LS.products, products), [products]);
     [logout, toast]
   );
   const adminLogout = logout;
+
+  /* Seller KYC */
+  const submitKyc = useCallback(
+    async (documentType: string, documentUrl?: string) => {
+      if (!user || !seller) return;
+      try {
+        if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+        await repoSubmitKyc({ sellerId: seller.id, documentType, documentUrl });
+        toast("success", "KYC submitted for review.");
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+      }
+    },
+    [user, seller, toast]
+  );
+
+  /* Admin: review seller KYC */
+  const reviewKyc = useCallback(
+    async (kycId: string, status: "approved" | "rejected", rejectionReason?: string) => {
+      if (!isAdmin) {
+        toast("error", "Administrator access is required.");
+        return;
+      }
+      try {
+        if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+        await repoReviewKyc(kycId, status, rejectionReason);
+        toast("success", `KYC ${status}.`);
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+      }
+    },
+    [isAdmin, toast]
+  );
+
+  /* Admin: load all sellers */
+  const getAllSellers = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+      const list = await repoGetAllSellers();
+      setSellers(list);
+    } catch (err) {
+      toast("error", toFriendlyFirebaseError(err));
+    }
+  }, [isAdmin, toast]);
+
+  /* Admin: approve/reject/suspend seller */
+  const approveSeller = useCallback(
+    async (sellerId: string, status: "approved" | "rejected" | "suspended") => {
+      if (!isAdmin) {
+        toast("error", "Administrator access is required.");
+        return;
+      }
+      try {
+        if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+        await repoUpdateSellerStatus(sellerId, status);
+        toast("success", `Seller ${status}.`);
+        await getAllSellers();
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+      }
+    },
+    [isAdmin, getAllSellers, toast]
+  );
+
+  /* Seller: update own store profile */
+  const updateSellerProfile = useCallback(
+    async (patch: Partial<{
+      storeName: string;
+      businessName: string;
+      phone: string;
+      address: string;
+      storeDescription: string;
+      storeLogo: string;
+      storeBanner: string;
+      contactEmail: string;
+    }>) => {
+      if (!seller) return;
+      try {
+        if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+        await repoUpdateSellerProfile(seller.id, patch);
+        setSeller((current) => (current ? { ...current, ...patch } : null));
+        toast("success", "Store profile updated.");
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+      }
+    },
+    [seller, toast]
+  );
+
+  /* Seller: load own products */
+  const getSellerProducts = useCallback(async () => {
+    if (!seller) return;
+    try {
+      if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+      const list = await repoGetSellerProducts(seller.id);
+      setSellerProducts(list);
+    } catch (err) {
+      toast("error", toFriendlyFirebaseError(err));
+    }
+  }, [seller, toast]);
+
+  /* Seller: add product (defaults to pending status) */
+  const addSellerProduct = useCallback(
+    async (p: Omit<Product, "id" | "createdAt" | "sellerId" | "sellerName" | "status">) => {
+      if (!seller) return;
+      try {
+        if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+        const created = await repoUpsertSellerProduct(
+          seller.id,
+          seller.storeName,
+          p
+        );
+        if (created) {
+          setSellerProducts((list) => [created, ...list]);
+          toast("success", `${created.name} submitted for approval.`);
+        }
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+      }
+    },
+    [seller, toast]
+  );
+
+  /* Seller: update own product */
+  const updateSellerProduct = useCallback(
+    async (id: string, patch: Partial<Product>) => {
+      if (!seller) return;
+      try {
+        if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+        // Verify ownership
+        const existing = sellerProducts.find((p) => p.id === id);
+        if (!existing || existing.sellerId !== seller.id) {
+          toast("error", "Product not found or you do not own it.");
+          return;
+        }
+        await repoUpsertSellerProduct(seller.id, seller.storeName, { ...existing, ...patch } as Product);
+        setSellerProducts((list) => list.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+        toast("success", "Product updated.");
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+      }
+    },
+    [seller, sellerProducts, toast]
+  );
+
+  /* Seller: delete own product */
+  const deleteSellerProduct = useCallback(
+    async (id: string) => {
+      if (!seller) return;
+      try {
+        if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+        await repoDeleteSellerProduct(id, seller.id);
+        setSellerProducts((list) => list.filter((p) => p.id !== id));
+        toast("info", "Product deleted.");
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+      }
+    },
+    [seller, toast]
+  );
+
+  /* Admin: load pending products */
+  const getPendingProducts = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+      const list = await repoGetPendingProducts();
+      setPendingProducts(list);
+    } catch (err) {
+      toast("error", toFriendlyFirebaseError(err));
+    }
+  }, [isAdmin, toast]);
+
+  /* Admin: approve/reject product */
+  const approveSellerProduct = useCallback(
+    async (productId: string, approved: boolean, rejectionReason?: string) => {
+      if (!isAdmin) {
+        toast("error", "Administrator access is required.");
+        return;
+      }
+      try {
+        if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+        await repoApproveProduct(productId, approved, rejectionReason);
+        toast("success", `Product ${approved ? "approved" : "rejected"}.`);
+        await getPendingProducts();
+      } catch (err) {
+        toast("error", toFriendlyFirebaseError(err));
+      }
+    },
+    [isAdmin, getPendingProducts, toast]
+  );
 
   const updateProfile = useCallback(
     async (data: Partial<Pick<User, "name" | "phone" | "address">>) => {
@@ -423,6 +785,7 @@ useEffect(() => write(LS.products, products), [products]);
 
       const order: Order = {
         id: "PG" + Date.now().toString(36).toUpperCase(),
+        orderNumber: "PG" + Date.now().toString(36).toUpperCase(),
         userId: user.id,
         customer,
         items: lines,
@@ -538,13 +901,19 @@ const updateProduct = useCallback(
 
   const value: StoreContextValue = {
     products,
+    sellerProducts,
+    pendingProducts,
     user,
     isAdmin,
+    isSeller,
+    seller,
+    sellers,
     isAuthReady,
     cart,
     orders,
     toasts,
     register,
+    registerSeller,
     login,
     logout,
     adminLogin,
@@ -563,6 +932,17 @@ const updateProduct = useCallback(
     updateProduct,
     deleteProduct,
     getProduct,
+    getAllSellers,
+    approveSeller,
+    submitKyc,
+    reviewKyc,
+    updateSellerProfile,
+    getSellerProducts,
+    addSellerProduct,
+    updateSellerProduct,
+    deleteSellerProduct,
+    getPendingProducts,
+    approveSellerProduct,
     toast,
     dismissToast,
   };

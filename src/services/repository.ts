@@ -32,6 +32,19 @@ import {
   fetchUserProfile,
   updateUserProfile,
 } from "./auth";
+import {
+  getSellerByUserId,
+  getSeller,
+  getAllSellers,
+  createSellerProfile,
+  updateSellerStatus,
+  updateSellerProfile,
+  getKycBySellerId,
+  submitKyc,
+  reviewKyc,
+  getUserProfile,
+  updateUserRole,
+} from "./sellers";
 import type { ProductRecord, UserProfile, OrderRecord } from "./types";
 import type { Product } from "../data/seed";
 import type { Order, OrderStatus, User } from "./storeService";
@@ -48,6 +61,8 @@ function toProductRecord(p: Product): ProductRecord {
     description: p.description,
     brand: "",
     category: p.category,
+    sellerId: "",
+    sellerName: "",
     price: p.price,
     discountPrice: p.discountPrice,
     images: p.images,
@@ -79,6 +94,10 @@ function toProduct(record: ProductRecord): Product {
     rating: record.rating,
     featured: record.featured,
     createdAt: record.createdAt,
+    sellerId: record.sellerId || undefined,
+    sellerName: record.sellerName || undefined,
+    status: record.status || undefined,
+    rejectionReason: record.rejectionReason || undefined,
   };
 }
 
@@ -86,6 +105,7 @@ function toProduct(record: ProductRecord): Product {
 function toOrder(record: OrderRecord): Order {
   return {
     id: record.id,
+    orderNumber: record.orderNumber,
     userId: record.userId,
     customer: {
       name: record.customer.name,
@@ -130,7 +150,11 @@ export async function repoGetProducts(): Promise<Product[]> {
     return seedProducts;
   }
   const records = await fetchProducts({ sortBy: "latest" });
-  return records.map(toProduct);
+  // Public catalog shows only approved products. Existing products without a
+  // status field are treated as approved for backward compatibility.
+  return records
+    .map(toProduct)
+    .filter((p) => p.status === "approved" || p.status === undefined);
 }
 
 export async function repoGetProduct(id: string): Promise<Product | null> {
@@ -241,22 +265,31 @@ export async function repoPlaceOrder(
       })),
     }),
   });
-  const payload = await result.json() as {
-    order?: {
-      orderId: string;
-      orderNumber: string;
-      status: Order["status"];
-      total: number;
-      payment: Order["payment"];
-      customer: { name: string };
-    };
-    error?: string;
-  };
+
+  // Robust JSON parsing: never let an empty/non-JSON body crash checkout.
+  let payload: { order?: { orderId: string; orderNumber: string; status: Order["status"]; total: number; payment: Order["payment"]; customer: { name: string }; }; error?: string } = {};
+  try {
+    const text = await result.text();
+    if (text) {
+      try {
+        payload = JSON.parse(text) as { order?: { orderId: string; orderNumber: string; status: Order["status"]; total: number; payment: Order["payment"]; customer: { name: string }; }; error?: string };
+      } catch {
+        // Non-JSON body: treat as an error.
+        payload = { error: `Server responded with status ${result.status}: ${text.slice(0, 200)}` };
+      }
+    } else {
+      payload = { error: `Server responded with status ${result.status} and an empty body.` };
+    }
+  } catch {
+    payload = { error: "Unable to read the server response." };
+  }
+
   if (!result.ok || !payload.order) throw new Error(payload.error ?? "Unable to create the order.");
   // The server is authoritative for monetary values and status. The client's
   // validated input supplies the line items and customer contact details.
   return {
     id: payload.order.orderId,
+    orderNumber: payload.order.orderNumber,
     userId: order.userId,
     customer: { ...order.customer, name: payload.order.customer.name },
     items: order.items,
@@ -327,3 +360,158 @@ export async function repoAssignDelhiveryWaybill(orderId: string, awb: string): 
 }
 
 export { isFirebaseConfigured };
+
+/* ------------------------------ Sellers ------------------------------ */
+
+export async function repoGetSellerByUserId(userId: string) {
+  if (!isFirebaseConfigured) return null;
+  return getSellerByUserId(userId);
+}
+
+export async function repoGetSeller(sellerId: string) {
+  if (!isFirebaseConfigured) return null;
+  return getSeller(sellerId);
+}
+
+export async function repoGetAllSellers() {
+  if (!isFirebaseConfigured) return [];
+  return getAllSellers();
+}
+
+export async function repoCreateSellerProfile(profile: {
+  userId: string;
+  storeName: string;
+  businessName?: string;
+  phone?: string;
+  address?: string;
+}) {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+  return createSellerProfile({
+    userId: profile.userId,
+    storeName: profile.storeName,
+    businessName: profile.businessName ?? "",
+    phone: profile.phone ?? "",
+    address: profile.address ?? "",
+    status: "pending",
+  });
+}
+
+export async function repoUpdateSellerStatus(sellerId: string, status: "pending" | "approved" | "rejected" | "suspended") {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+  return updateSellerStatus(sellerId, status);
+}
+
+export async function repoUpdateSellerProfile(sellerId: string, patch: Partial<{
+  storeName: string;
+  businessName: string;
+  phone: string;
+  address: string;
+  storeDescription: string;
+  storeLogo: string;
+  storeBanner: string;
+  contactEmail: string;
+}>) {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+  return updateSellerProfile(sellerId, patch);
+}
+
+export async function repoGetKycBySellerId(sellerId: string) {
+  if (!isFirebaseConfigured) return null;
+  return getKycBySellerId(sellerId);
+}
+
+export async function repoSubmitKyc(kyc: {
+  sellerId: string;
+  documentType: string;
+  documentUrl?: string;
+}) {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+  return submitKyc(kyc);
+}
+
+export async function repoReviewKyc(kycId: string, status: "pending" | "approved" | "rejected", rejectionReason?: string) {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+  return reviewKyc(kycId, status, rejectionReason);
+}
+
+export async function repoGetUserProfile(uid: string) {
+  if (!isFirebaseConfigured) return null;
+  return getUserProfile(uid);
+}
+
+export async function repoUpdateUserRole(uid: string, role: "user" | "admin" | "seller") {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+  return updateUserRole(uid, role);
+}
+
+/* ------------------------------ Seller Products ------------------------------ */
+
+export async function repoGetSellerProducts(sellerId: string): Promise<Product[]> {
+  if (!isFirebaseConfigured) {
+    const { seedProducts } = await import("../data/seed");
+    return seedProducts.filter((p) => p.sellerId === sellerId);
+  }
+  const records = await fetchProducts({ status: undefined, sortBy: "latest" });
+  // Fetch all products then filter by seller (Firestore can't do OR on status)
+  const all = records.map(toProduct);
+  return all.filter((p) => p.sellerId === sellerId);
+}
+
+export async function repoGetPendingProducts(): Promise<Product[]> {
+  if (!isFirebaseConfigured) {
+    const { seedProducts } = await import("../data/seed");
+    return seedProducts.filter((p) => p.status === "pending");
+  }
+  const records = await fetchProducts({ status: "pending", sortBy: "latest" });
+  return records.map(toProduct);
+}
+
+export async function repoUpsertSellerProduct(
+  sellerId: string,
+  sellerName: string,
+  p: Omit<Product, "id" | "createdAt" | "sellerId" | "sellerName"> & { id?: string }
+): Promise<Product | null> {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+  const record = toProductRecord({
+    ...(p as Product),
+    sellerId,
+    sellerName,
+    id: p.id ?? "",
+    createdAt: Date.now(),
+    status: p.id ? (p.status ?? "pending") : "pending",
+  } as Product);
+  if (p.id) {
+    const { id, ...rest } = record;
+    await updateProduct(id, rest);
+    return toProduct(record);
+  } else {
+    const { id: _id, ...rest } = record;
+    return toProduct(await createProduct(rest));
+  }
+}
+
+export async function repoApproveProduct(
+  productId: string,
+  approved: boolean,
+  rejectionReason?: string
+): Promise<void> {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+  const updateData: Record<string, unknown> = {
+    status: approved ? "approved" : "rejected",
+    updatedAt: Date.now(),
+  };
+  if (!approved && rejectionReason) {
+    updateData.rejectionReason = rejectionReason;
+  }
+  await updateProduct(productId, updateData);
+}
+
+export async function repoDeleteSellerProduct(productId: string, sellerId: string): Promise<void> {
+  if (!isFirebaseConfigured) throw new Error("Firebase is not configured.");
+  // Verify ownership before deleting.
+  const product = await repoGetProduct(productId);
+  if (!product || product.sellerId !== sellerId) {
+    throw new Error("Product not found or you do not own this product.");
+  }
+  await deleteProduct(productId);
+}

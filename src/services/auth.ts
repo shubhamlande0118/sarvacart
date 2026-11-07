@@ -68,6 +68,42 @@ export async function signUpWithEmail(
   return cred.user;
 }
 
+/**
+ * Register a new seller account.
+ * Creates a Firebase Auth user with role "seller" and a pending seller profile.
+ * The seller cannot sell until an admin approves their KYC.
+ */
+export async function registerSellerWithEmail(
+  name: string,
+  email: string,
+  password: string,
+  storeName: string,
+  businessName?: string,
+  phone?: string,
+  address?: string
+): Promise<{ user: FirebaseUser; sellerId: string }> {
+  const auth = await initializeAuth();
+  const cred = await createUserWithEmailAndPassword(auth, email, password);
+  await updateProfile(cred.user, { displayName: name });
+  await sendEmailVerification(cred.user);
+
+  const userProfile: UserProfile = toUserProfile(cred.user.uid, cred.user);
+  userProfile.role = "seller";
+  await createUserProfile(userProfile);
+
+  const { createSellerProfile } = await import("./sellers");
+  const seller = await createSellerProfile({
+    userId: cred.user.uid,
+    storeName,
+    businessName: businessName ?? "",
+    phone: phone ?? "",
+    address: address ?? "",
+    status: "pending",
+  });
+
+  return { user: cred.user, sellerId: seller.id };
+}
+
 export async function logInWithEmail(email: string, password: string): Promise<FirebaseUser> {
   const auth = await initializeAuth();
   const cred = await signInWithEmailAndPassword(auth, email, password);

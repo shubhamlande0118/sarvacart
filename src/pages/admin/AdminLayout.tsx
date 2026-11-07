@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LayoutDashboard, PackagePlus, Boxes, ShoppingCart, LogOut, Shield, Home } from "lucide-react";
+import { LayoutDashboard, PackagePlus, Boxes, ShoppingCart, LogOut, Shield, Home, Users, ShieldCheck, DollarSign } from "lucide-react";
 import { useStore } from "../../lib/store";
 import { Page } from "../../components/ui";
 import { cn } from "../../utils/cn";
@@ -9,6 +9,9 @@ const links = [
   { to: "/admin/add", label: "Add Product", icon: PackagePlus, end: false },
   { to: "/admin/products", label: "Manage Products", icon: Boxes, end: false },
   { to: "/admin/orders", label: "Orders", icon: ShoppingCart, end: false },
+  { to: "/admin/sellers", label: "Sellers", icon: Users, end: false },
+  { to: "/admin/products/approval", label: "Product Approval", icon: ShieldCheck, end: false },
+  { to: "/admin/commissions", label: "Commissions", icon: DollarSign, end: false },
 ];
 
 export default function AdminLayout() {

@@ -16,3 +16,10 @@ export function AdminRoute({ children }: { children: ReactNode }) {
   if (!isAdmin) return <Navigate to="/admin/login" replace />;
   return <>{children}</>;
 }
+
+export function SellerRoute({ children }: { children: ReactNode }) {
+  const { isSeller, isAuthReady } = useStore();
+  if (!isAuthReady) return null;
+  if (!isSeller) return <Navigate to="/seller/login" replace />;
+  return <>{children}</>;
+}

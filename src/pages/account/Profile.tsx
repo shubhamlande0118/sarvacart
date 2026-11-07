@@ -22,7 +22,7 @@ export default function Profile() {
   };
 
   const inputCls =
-    "w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-gold/50";
+    "w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[#1c1917] outline-none transition focus:border-gold/50";
 
   return (
     <Page className="mx-auto max-w-5xl px-4 pb-24 pt-28 sm:px-6">

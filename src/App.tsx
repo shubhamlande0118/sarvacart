@@ -31,6 +31,20 @@ import Dashboard from "./pages/admin/Dashboard";
 import ProductForm from "./pages/admin/ProductForm";
 import ManageProducts from "./pages/admin/ManageProducts";
 import AdminOrders from "./pages/admin/AdminOrders";
+import Sellers from "./pages/admin/Sellers";
+import ProductApproval from "./pages/admin/ProductApproval";
+import Commissions from "./pages/admin/Commissions";
+import SellerLayout from "./pages/seller/SellerLayout";
+import SellerDashboard from "./pages/seller/SellerDashboard";
+import SellerStore from "./pages/seller/SellerStore";
+import SellerKyc from "./pages/seller/SellerKyc";
+import SellerInventory from "./pages/seller/SellerInventory";
+import SellerOrders from "./pages/seller/SellerOrders";
+import SellerProducts from "./pages/seller/SellerProducts";
+import SellerProductForm from "./pages/seller/SellerProductForm";
+import SellerLogin from "./pages/auth/SellerLogin";
+import SellerRegister from "./pages/auth/SellerRegister";
+import { SellerRoute } from "./components/ProtectedRoute";
 import { About, Contact, Privacy, Terms, Refund } from "./pages/Static";
 
 function ScrollToTop() {
@@ -94,6 +108,26 @@ function AnimatedRoutes() {
           <Route path="edit/:id" element={<ProductForm />} />
           <Route path="products" element={<ManageProducts />} />
           <Route path="orders" element={<AdminOrders />} />
+          <Route path="sellers" element={<Sellers />} />
+          <Route path="products/approval" element={<ProductApproval />} />
+          <Route path="commissions" element={<Commissions />} />
+        </Route>
+
+        <Route
+          path="/seller"
+          element={<SellerRoute><SellerLayout /></SellerRoute>}
+        >
+          <Route index element={<SellerDashboard />} />
+          <Route path="login" element={<SellerLogin />} />
+          <Route path="register" element={<SellerRegister />} />
+          <Route path="dashboard" element={<SellerDashboard />} />
+          <Route path="store" element={<SellerStore />} />
+          <Route path="kyc" element={<SellerKyc />} />
+          <Route path="products" element={<SellerProducts />} />
+          <Route path="products/new" element={<SellerProductForm />} />
+          <Route path="products/:id/edit" element={<SellerProductForm />} />
+          <Route path="inventory" element={<SellerInventory />} />
+          <Route path="orders" element={<SellerOrders />} />
         </Route>
 
         <Route path="/about" element={<About />} />

@@ -31,7 +31,7 @@ export default function ManageProducts() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search products…"
-          className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
+          className="w-full bg-transparent text-sm text-[#1c1917] placeholder:text-[#81756f] outline-none"
         />
       </div>
 

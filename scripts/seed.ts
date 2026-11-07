@@ -11,6 +11,7 @@
  *   - A Firebase service account JSON saved to `FIREBASE_SERVICE_ACCOUNT` env
  *     var (path to JSON file OR inline JSON string).
  *   - Valid `VITE_FIREBASE_PROJECT_ID` (used to locate the Firestore project).
+ *   - For --create-admin: `ADMIN_EMAIL` and `ADMIN_PASSWORD` env vars.
  *
  * Idempotency & safety guarantees:
  *   - Products are seeded ONLY if the `products` collection is empty.
@@ -19,7 +20,9 @@
  *   - The admin user is created ONLY when `--create-admin` is passed AND the
  *     user does not already exist. If the user exists, we only (a) set the
  *     `admin` custom claim and (b) update their Firestore `role` to "admin".
+ *   - Never promotes an existing customer to admin based only on email.
  *   - Every skipped/inserted/updated document prints a clear log line.
+ *   - Passwords and service-account credentials are never printed.
  */
 
 import { readFileSync, existsSync } from "fs";
@@ -34,15 +37,18 @@ import { categories, seedProducts as seedProductList } from "../src/data/seed";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const ADMIN_EMAIL = "admin@sarvacart.store";
 const USERS_COLLECTION = "users";
 const PRODUCTS_COLLECTION = "products";
 const CATEGORIES_COLLECTION = "categories";
 
+function getEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing ${name} environment variable.`);
+  return v;
+}
+
 function getProjectId(): string {
-  const id = process.env.VITE_FIREBASE_PROJECT_ID;
-  if (!id) throw new Error("Missing VITE_FIREBASE_PROJECT_ID in environment.");
-  return id;
+  return getEnv("VITE_FIREBASE_PROJECT_ID");
 }
 
 function loadServiceAccount(): { projectId: string; clientEmail: string; privateKey: string } {
@@ -85,6 +91,15 @@ function log(...args: unknown[]) {
   console.log("[seed]", ...args);
 }
 
+function logSafe(label: string, value: string | undefined) {
+  // Never print secrets (passwords, private keys, tokens).
+  if (!value) {
+    log(`${label}: <not set>`);
+    return;
+  }
+  log(`${label}: <value withheld>`);
+}
+
 async function isCollectionEmpty(db: admin.firestore.Firestore, name: string): Promise<boolean> {
   const snap = await db.collection(name).limit(1).get();
   return snap.empty;
@@ -101,7 +116,7 @@ async function seedProducts(db: admin.firestore.Firestore): Promise<void> {
 
   const batch = db.batch();
   let count = 0;
-for (const p of seedProductList) {
+  for (const p of seedProductList) {
     const doc = db.collection(PRODUCTS_COLLECTION).doc(p.id);
     batch.set(doc, {
       id: p.id,
@@ -163,9 +178,15 @@ async function bootstrapAdmin(
   auth: admin.auth.Auth,
   createIfMissing: boolean
 ): Promise<void> {
+  const adminEmail = getEnv("ADMIN_EMAIL");
+  const adminPassword = getEnv("ADMIN_PASSWORD");
+
+  logSafe("ADMIN_EMAIL", adminEmail);
+  logSafe("ADMIN_PASSWORD", adminPassword);
+
   let user: admin.auth.UserRecord | null = null;
   try {
-    user = await auth.getUserByEmail(ADMIN_EMAIL);
+    user = await auth.getUserByEmail(adminEmail);
   } catch (err) {
     const code = (err as { code?: string })?.code;
     if (code !== "auth/user-not-found") {
@@ -176,33 +197,50 @@ async function bootstrapAdmin(
   if (!user) {
     if (!createIfMissing) {
       log(
-        `Admin "${ADMIN_EMAIL}" does not exist. Run with --create-admin to create it.`
+        `Admin "${adminEmail}" does not exist. Run with --create-admin to create it.`
       );
       return;
     }
     const created = await auth.createUser({
-      email: ADMIN_EMAIL,
+      email: adminEmail,
+      password: adminPassword,
       emailVerified: true,
       displayName: "SarvaCart Admin",
     });
     user = await auth.getUser(created.uid);
-    log(`Created admin auth user: ${ADMIN_EMAIL} (${created.uid}).`);
+    log(`Created admin auth user: ${adminEmail} (${created.uid}).`);
   } else {
-    log(`Admin "${ADMIN_EMAIL}" already exists.`);
+    log(`Admin "${adminEmail}" already exists.`);
+    // If the existing account has no password set (e.g. Google-only), update it
+    // only when --create-admin is explicitly passed.
+    if (createIfMissing && !user.passwordHash) {
+      await auth.updateUser(user.uid, { password: adminPassword });
+      log(`Set password for existing admin auth user: ${adminEmail}.`);
+    }
   }
 
   // 1) Set the admin custom claim (idempotent).
   await auth.setCustomUserClaims(user.uid, { admin: true });
-  log(`Assigned "admin" custom claim to ${ADMIN_EMAIL}.`);
+  log(`Assigned "admin" custom claim to ${adminEmail}.`);
 
-  // 2) Upsert the Firestore profile doc with role = admin (idempotent).
+  // 2) Verify the claim was successfully assigned.
+  const verified = await auth.getUser(user.uid);
+  const claim = (verified.customClaims as Record<string, unknown> | undefined)?.admin;
+  if (claim !== true) {
+    throw new Error(
+      `Failed to verify admin custom claim for ${adminEmail}. Claim value: ${JSON.stringify(claim)}`
+    );
+  }
+  log(`Verified admin custom claim for ${adminEmail}.`);
+
+  // 3) Upsert the Firestore profile doc with role = admin (idempotent).
   const docRef = db.collection(USERS_COLLECTION).doc(user.uid);
   const existing = await docRef.get();
   const now = Date.now();
   const profile = {
     id: user.uid,
     name: "SarvaCart Admin",
-    email: ADMIN_EMAIL,
+    email: adminEmail,
     phone: "",
     role: "admin",
     createdAt: existing.exists ? existing.data()?.createdAt ?? now : now,
@@ -211,9 +249,9 @@ async function bootstrapAdmin(
   await docRef.set(profile, { merge: true });
 
   if (existing.exists) {
-    log(`Updated Firestore role for ${ADMIN_EMAIL} to "admin".`);
+    log(`Updated Firestore role for ${adminEmail} to "admin".`);
   } else {
-    log(`Created Firestore admin profile for ${ADMIN_EMAIL}.`);
+    log(`Created Firestore admin profile for ${adminEmail}.`);
   }
 }
 
@@ -232,8 +270,10 @@ async function main() {
   await seedProducts(db);
   await seedCategories(db);
 
-  log("Bootstrapping admin user...");
-  await bootstrapAdmin(db, auth, createAdmin);
+  if (createAdmin) {
+    log("Bootstrapping admin user...");
+    await bootstrapAdmin(db, auth, true);
+  }
 
   log("Done.");
   process.exit(0);

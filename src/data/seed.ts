@@ -21,6 +21,10 @@ export interface Product {
   rating: number;
   featured?: boolean;
   createdAt: number;
+  sellerId?: string;
+  sellerName?: string;
+  status?: "pending" | "approved" | "rejected" | "inactive";
+  rejectionReason?: string;
 }
 
 const px = (id: number) =>

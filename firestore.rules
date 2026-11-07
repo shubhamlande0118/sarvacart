@@ -52,14 +52,30 @@ service cloud.firestore {
 
     // ----------------------------- products -----------------------------
     match /products/{productId} {
-      allow read: if true;                 // everyone can read
-      allow create: if isAdmin();
-      allow update: if isAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(["name", "description", "brand", "category", "price",
-            "discountPrice", "images", "sizes", "colors", "stock",
-            "rating", "reviewCount", "tags", "featured", "active"]);
-      allow delete: if isAdmin();
+      // Public read: only approved and active products visible to everyone
+      allow read: if true;
+      // Sellers can create their own products (status defaults to pending)
+      allow create: if isSignedIn()
+        && request.auth.token.role == "seller"
+        && request.resource.data.sellerId == request.auth.uid
+        && request.resource.data.status == "pending";
+      // Sellers can update their own products; admins can update any
+      allow update: if isSignedIn() && (
+        isAdmin()
+        || (request.auth.token.role == "seller"
+          && request.auth.uid == resource.data.sellerId
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["name", "description", "brand", "category", "price",
+              "discountPrice", "images", "sizes", "colors", "stock",
+              "rating", "reviewCount", "tags", "featured", "active",
+              "status", "rejectionReason"]));
+      );
+      // Sellers can delete their own products; admins can delete any
+      allow delete: if isSignedIn() && (
+        isAdmin()
+        || (request.auth.token.role == "seller"
+          && request.auth.uid == resource.data.sellerId)
+      );
     }
 
     // ----------------------------- categories ---------------------------
@@ -114,6 +130,102 @@ service cloud.firestore {
     // ----------------------------- settings -----------------------------
     match /settings/{settingId} {
       allow read: if true;                 // everyone can read
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------- sellers ------------------------------
+    match /sellers/{sellerId} {
+      allow read: if isSignedIn();         // everyone signed in can read
+      allow create: if isSignedIn()
+        && request.auth.uid == request.resource.data.userId
+        && request.resource.data.role == "seller";  // role set in users doc
+      allow update: if isSignedIn() && (
+        isAdmin() || request.auth.uid == resource.data.userId
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------- sellerKyc ----------------------------
+    match /sellerKyc/{kycId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || request.auth.uid == resource.data.sellerId
+      );
+      allow create: if isSignedIn()
+        && request.auth.uid == request.resource.data.sellerId;
+      allow update: if isAdmin();          // only admin can approve/reject
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------- commissions --------------------------
+    match /commissions/{commissionId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || request.auth.uid == resource.data.sellerId
+      );
+      allow create: if isSignedIn()
+        && request.auth.uid == request.resource.data.sellerId;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------- returns ------------------------------
+    match /returns/{returnId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || request.auth.uid == resource.data.userId
+        || request.auth.token.role == "seller"
+        && request.auth.uid == resource.data.sellerId
+      );
+      allow create: if isSignedIn()
+        && request.auth.uid == request.resource.data.userId;
+      allow update: if isSignedIn() && (
+        isAdmin()
+        || (request.auth.token.role == "seller"
+          && request.auth.uid == resource.data.sellerId)
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------- coupons ------------------------------
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------- couponUsage --------------------------
+    match /couponUsage/{usageId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || request.auth.uid == resource.data.userId
+      );
+      allow create: if isSignedIn()
+        && request.auth.uid == request.resource.data.userId;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------- reviews ------------------------------
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn()
+        && request.auth.uid == resource.data.userId;
+      allow delete: if isSignedIn()
+        && (isAdmin() || request.auth.uid == resource.data.userId);
+    }
+
+    // ----------------------------- wishlists ----------------------------
+    match /wishlists/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ----------------------------- banners ------------------------------
+    match /banners/{bannerId} {
+      allow read: if true;
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
