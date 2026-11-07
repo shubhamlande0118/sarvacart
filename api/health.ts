@@ -1,14 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-export default async function handler(
-  _request: VercelRequest,
-  response: VercelResponse
+export default function handler(
+  _req: VercelRequest,
+  res: VercelResponse
 ) {
-  response.setHeader("Content-Type", "application/json");
-  response.setHeader("Cache-Control", "private, no-store");
-  return response.status(200).json({
+  res.status(200).json({
     ok: true,
     service: "sarvacart-api",
-    timestamp: new Date().toISOString(),
   });
 }
