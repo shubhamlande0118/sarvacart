@@ -66,9 +66,11 @@ function idempotencyId(uid: string, key: string) {
   return createHash("sha256").update(`${uid}:${key}`).digest("hex");
 }
 
-function sendError(response: VercelResponse, status: number, message: string) {
+function sendError(response: VercelResponse, status: number, message: string, code?: string) {
   response.setHeader("Cache-Control", "private, no-store");
-  return response.status(status).json({ error: message });
+  const body: Record<string, string> = { error: message };
+  if (code) body.code = code;
+  return response.status(status).json(body);
 }
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
@@ -213,8 +215,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
       };
       return response.status(201).json({ order: confirmation });
     } catch (error) {
-      if (error instanceof Error && error.message.includes("FIREBASE_SERVICE_ACCOUNT")) {
-        return sendError(response, 500, "Checkout service is not configured.");
+      if (error instanceof Error && error.message === "FIREBASE_SERVICE_ACCOUNT is not configured.") {
+        return sendError(response, 500, "Checkout service is not configured.", "FIREBASE_ADMIN_NOT_CONFIGURED");
+      }
+      if (error instanceof Error && (error.message.includes("JSON.parse") || error.message.includes("Unexpected token"))) {
+        return sendError(response, 500, "Checkout service configuration is invalid.", "FIREBASE_ADMIN_CONFIG_INVALID");
       }
       if (error instanceof Error && error.message.includes("cart product")) {
         return sendError(response, 400, error.message);
@@ -222,7 +227,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       if (error instanceof Error && error.message.includes("out of stock")) {
         return sendError(response, 409, error.message);
       }
-      return sendError(response, 500, "Unable to create the order. Please try again.");
+      return sendError(response, 500, "Unable to create the order. Please try again.", "FIREBASE_ADMIN_INIT_FAILED");
     }
   } catch (error) {
     // Outer safety net: any uncaught error (including platform/runtime issues)
