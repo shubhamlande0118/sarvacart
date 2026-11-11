@@ -215,19 +215,39 @@ export default async function handler(request: VercelRequest, response: VercelRe
       };
       return response.status(201).json({ order: confirmation });
     } catch (error) {
-      if (error instanceof Error && error.message === "FIREBASE_SERVICE_ACCOUNT is not configured.") {
+      const err = error as Error;
+
+      if (err.message === "FIREBASE_SERVICE_ACCOUNT is not configured.") {
         return sendError(response, 500, "Checkout service is not configured.", "FIREBASE_ADMIN_NOT_CONFIGURED");
       }
-      if (error instanceof Error && (error.message.includes("JSON.parse") || error.message.includes("Unexpected token"))) {
+      if (err.message.includes("JSON.parse") || err.message.includes("Unexpected token")) {
         return sendError(response, 500, "Checkout service configuration is invalid.", "FIREBASE_ADMIN_CONFIG_INVALID");
       }
-      if (error instanceof Error && error.message.includes("cart product")) {
-        return sendError(response, 400, error.message);
+      if (err.message.includes("cart product")) {
+        return sendError(response, 400, err.message, "PRODUCT_NOT_FOUND");
       }
-      if (error instanceof Error && error.message.includes("out of stock")) {
-        return sendError(response, 409, error.message);
+      if (err.message.includes("out of stock")) {
+        return sendError(response, 409, err.message, "OUT_OF_STOCK");
       }
-      return sendError(response, 500, "Unable to create the order. Please try again.", "FIREBASE_ADMIN_INIT_FAILED");
+      if (err.message.includes("auth/") || err.message.includes("token") || err.message.includes("credential")) {
+        return sendError(response, 401, "Authentication failed.", "AUTHENTICATION_FAILED");
+      }
+      if (err.message.includes("permission") || err.message.includes("denied")) {
+        return sendError(response, 403, "Database access denied.", "FIRESTORE_PERMISSION_DENIED");
+      }
+      if (err.message.includes("not-found") || err.message.includes("does not exist")) {
+        return sendError(response, 404, "Resource not found.", "RESOURCE_NOT_FOUND");
+      }
+      if (err.message.includes("already-exists")) {
+        return sendError(response, 409, "Order already exists.", "ORDER_ALREADY_EXISTS");
+      }
+      if (err.message.includes("deadline") || err.message.includes("timeout")) {
+        return sendError(response, 504, "Request timed out.", "REQUEST_TIMEOUT");
+      }
+      if (err.message.includes("unavailable") || err.message.includes("internal")) {
+        return sendError(response, 503, "Database temporarily unavailable.", "FIRESTORE_TEMPORARILY_UNAVAILABLE");
+      }
+      return sendError(response, 500, "Unable to create the order. Please try again.", "ORDER_CREATION_FAILED");
     }
   } catch (error) {
     // Outer safety net: any uncaught error (including platform/runtime issues)
