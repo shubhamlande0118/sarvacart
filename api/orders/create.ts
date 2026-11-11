@@ -120,12 +120,17 @@ export default async function handler(request: VercelRequest, response: VercelRe
         const productSnapshots = new Map<string, DocumentData>();
         for (const [productId, qty] of quantities) {
           const productRef = db.collection("products").doc(productId);
-          const snapshot = await transaction.get(productRef);
-          if (!snapshot.exists) throw new Error("A cart product is no longer available.");
+          let snapshot: DocumentData | null = null;
+          try {
+            snapshot = await transaction.get(productRef);
+          } catch (err) {
+            throw new Error(`Failed to read product ${productId}: ${(err as Error).message}`);
+          }
+          if (!snapshot.exists) throw new Error(`Product not found: ${productId}`);
           const product = snapshot.data() as DocumentData;
           if (product.active !== true || !Number.isInteger(product.stock) || product.stock < qty
             || typeof product.price !== "number" || typeof product.discountPrice !== "number") {
-            throw new Error("One or more items are out of stock.");
+            throw new Error(`Product ${productId} is out of stock or inactive`);
           }
           productSnapshots.set(productId, product);
         }
@@ -133,12 +138,17 @@ export default async function handler(request: VercelRequest, response: VercelRe
         let subtotal = 0;
         let discounted = 0;
         const items = itemsInput.map((item) => {
-          const product = productSnapshots.get(item.productId)!;
+          const product = productSnapshots.get(item.productId);
+          if (!product) throw new Error(`Product ${item.productId} not found in cart`);
           subtotal += product.price * item.qty;
           discounted += product.discountPrice * item.qty;
-          transaction.update(db.collection("products").doc(item.productId), {
-            stock: product.stock - quantities.get(item.productId)!,
-          });
+          try {
+            transaction.update(db.collection("products").doc(item.productId), {
+              stock: product.stock - quantities.get(item.productId)!,
+            });
+          } catch (err) {
+            throw new Error(`Failed to reserve stock for ${item.productId}: ${(err as Error).message}`);
+          }
           return {
             productId: item.productId,
             name: String(product.name ?? "Product"),
@@ -168,8 +178,18 @@ export default async function handler(request: VercelRequest, response: VercelRe
           createdAt: now,
           updatedAt: now,
         };
-        transaction.create(orderRef, record);
-        if (requestRef) transaction.create(requestRef, { uid: token.uid, order: record, createdAt: now });
+        try {
+          transaction.create(orderRef, record);
+        } catch (err) {
+          throw new Error(`Failed to create order document: ${(err as Error).message}`);
+        }
+        if (requestRef) {
+          try {
+            transaction.create(requestRef, { uid: token.uid, order: record, createdAt: now });
+          } catch (err) {
+            throw new Error(`Failed to create idempotency record: ${(err as Error).message}`);
+          }
+        }
 
         // --- Commission calculation (server-side, 10% default) ---
         const commissionRate = 0.10;
@@ -181,24 +201,26 @@ export default async function handler(request: VercelRequest, response: VercelRe
           existing.items.push(item);
           itemsBySeller.set(sid, existing);
         }
-        const commissionRefs: DocumentData[] = [];
         for (const [sellerId, data] of itemsBySeller.entries()) {
           const grossAmount = data.gross;
           const commissionAmount = Math.round(grossAmount * commissionRate * 100) / 100;
           const sellerAmount = Math.round((grossAmount - commissionAmount) * 100) / 100;
           const commissionRef = db.collection("commissions").doc();
-          commissionRefs.push({
-            id: commissionRef.id,
-            orderId: orderRef.id,
-            sellerId,
-            grossAmount,
-            commissionRate,
-            commissionAmount,
-            sellerAmount,
-            status: "pending",
-            createdAt: now,
-          });
-          transaction.create(commissionRef, commissionRefs[commissionRefs.length - 1]);
+          try {
+            transaction.create(commissionRef, {
+              id: commissionRef.id,
+              orderId: orderRef.id,
+              sellerId,
+              grossAmount,
+              commissionRate,
+              commissionAmount,
+              sellerAmount,
+              status: "pending",
+              createdAt: now,
+            });
+          } catch (err) {
+            throw new Error(`Failed to create commission record for ${sellerId}: ${(err as Error).message}`);
+          }
         }
 
         return record;
