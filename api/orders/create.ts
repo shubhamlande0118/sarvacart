@@ -84,7 +84,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     const authorization = request.headers.authorization;
     if (!authorization?.startsWith("Bearer ")) {
-      return sendError(response, 401, "Authentication is required.");
+      return sendError(response, 401, "Authentication is required.", "MISSING_AUTHORIZATION_HEADER");
     }
 
     try {
@@ -228,6 +228,12 @@ export default async function handler(request: VercelRequest, response: VercelRe
       }
       if (err.message.includes("out of stock")) {
         return sendError(response, 409, err.message, "OUT_OF_STOCK");
+      }
+      if (err.message.includes("auth/id-token-expired") || err.message.includes("token expired")) {
+        return sendError(response, 401, "Authentication token has expired.", "TOKEN_EXPIRED");
+      }
+      if (err.message.includes("auth/argument-error") || err.message.includes("invalid") || err.message.includes("no \"aud\" claim")) {
+        return sendError(response, 401, "Invalid ID token. Token may be from a different Firebase project.", "INVALID_ID_TOKEN");
       }
       if (err.message.includes("auth/") || err.message.includes("token") || err.message.includes("credential")) {
         return sendError(response, 401, "Authentication failed.", "AUTHENTICATION_FAILED");
