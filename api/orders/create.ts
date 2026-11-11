@@ -215,47 +215,62 @@ export default async function handler(request: VercelRequest, response: VercelRe
       };
       return response.status(201).json({ order: confirmation });
     } catch (error) {
-      const err = error as Error;
+      const err = error as { code?: string; message?: string };
 
-      if (err.message === "FIREBASE_SERVICE_ACCOUNT is not configured.") {
+      const code = err.code || "";
+      const message = err.message || "";
+
+      if (message === "FIREBASE_SERVICE_ACCOUNT is not configured.") {
         return sendError(response, 500, "Checkout service is not configured.", "FIREBASE_ADMIN_NOT_CONFIGURED");
       }
-      if (err.message.includes("JSON.parse") || err.message.includes("Unexpected token")) {
+      if (message.includes("JSON.parse") || message.includes("Unexpected token")) {
         return sendError(response, 500, "Checkout service configuration is invalid.", "FIREBASE_ADMIN_CONFIG_INVALID");
       }
-      if (err.message.includes("cart product")) {
-        return sendError(response, 400, err.message, "PRODUCT_NOT_FOUND");
-      }
-      if (err.message.includes("out of stock")) {
-        return sendError(response, 409, err.message, "OUT_OF_STOCK");
-      }
-      if (err.message.includes("auth/id-token-expired") || err.message.includes("token expired")) {
+      if (code === "auth/id-token-expired" || message.includes("id-token-expired") || message.includes("token expired")) {
         return sendError(response, 401, "Authentication token has expired.", "TOKEN_EXPIRED");
       }
-      if (err.message.includes("auth/argument-error") || err.message.includes("invalid") || err.message.includes("no \"aud\" claim")) {
-        return sendError(response, 401, "Invalid ID token. Token may be from a different Firebase project.", "INVALID_ID_TOKEN");
+      if (code === "auth/id-token-revoked" || message.includes("id-token-revoked")) {
+        return sendError(response, 401, "Authentication token has been revoked.", "TOKEN_REVOKED");
       }
-      if (err.message.includes("auth/") || err.message.includes("token") || err.message.includes("credential")) {
+      if (code === "auth/user-disabled" || message.includes("user-disabled")) {
+        return sendError(response, 401, "This account has been disabled.", "USER_DISABLED");
+      }
+      if (code === "auth/user-not-found" || message.includes("user-not-found")) {
+        return sendError(response, 401, "Firebase Auth user not found.", "AUTH_USER_NOT_FOUND");
+      }
+      if (code === "auth/argument-error" || message.includes("argument-error") || message.includes("no \"aud\" claim")) {
+        return sendError(response, 401, "Invalid ID token. Token may be from a different Firebase project or malformed.", "INVALID_ID_TOKEN");
+      }
+      if (code === "auth/invalid-id-token" || message.includes("invalid-id-token")) {
+        return sendError(response, 401, "Invalid ID token format.", "INVALID_ID_TOKEN_FORMAT");
+      }
+      if (code.startsWith("auth/") || message.includes("auth/") || message.includes("token") || message.includes("credential")) {
         return sendError(response, 401, "Authentication failed.", "AUTHENTICATION_FAILED");
       }
-      if (err.message.includes("permission") || err.message.includes("denied")) {
+      if (message.includes("cart product")) {
+        return sendError(response, 400, message, "PRODUCT_NOT_FOUND");
+      }
+      if (message.includes("out of stock")) {
+        return sendError(response, 409, message, "OUT_OF_STOCK");
+      }
+      if (message.includes("permission") || message.includes("denied")) {
         return sendError(response, 403, "Database access denied.", "FIRESTORE_PERMISSION_DENIED");
       }
-      if (err.message.includes("not-found") || err.message.includes("does not exist")) {
+      if (message.includes("not-found") || message.includes("does not exist")) {
         return sendError(response, 404, "Resource not found.", "RESOURCE_NOT_FOUND");
       }
-      if (err.message.includes("already-exists")) {
+      if (message.includes("already-exists")) {
         return sendError(response, 409, "Order already exists.", "ORDER_ALREADY_EXISTS");
       }
-      if (err.message.includes("deadline") || err.message.includes("timeout")) {
+      if (message.includes("deadline") || message.includes("timeout")) {
         return sendError(response, 504, "Request timed out.", "REQUEST_TIMEOUT");
       }
-      if (err.message.includes("unavailable") || err.message.includes("internal")) {
+      if (message.includes("unavailable") || message.includes("internal")) {
         return sendError(response, 503, "Database temporarily unavailable.", "FIRESTORE_TEMPORARILY_UNAVAILABLE");
       }
       return sendError(response, 500, "Unable to create the order. Please try again.", "ORDER_CREATION_FAILED");
     }
-  } catch (error) {
+    } catch (error) {
     // Outer safety net: any uncaught error (including platform/runtime issues)
     // must still return valid JSON, never an empty response.
     console.error("[orders/create] Uncaught error:", error);

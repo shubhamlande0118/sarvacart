@@ -113,7 +113,7 @@ export async function logInWithEmail(email: string, password: string): Promise<F
 export async function getCurrentIdToken(): Promise<string> {
   const auth = await initializeAuth();
   if (!auth.currentUser) throw new Error("Please sign in to continue.");
-  return auth.currentUser.getIdToken();
+  return auth.currentUser.getIdToken(true);
 }
 
 export async function logInWithGoogle(): Promise<FirebaseUser> {
