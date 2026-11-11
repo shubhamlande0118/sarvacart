@@ -31,7 +31,7 @@ export default function Toaster() {
               className="glass pointer-events-auto flex items-center gap-3 rounded-2xl px-4 py-3 shadow-2xl"
             >
               <Icon className={`h-5 w-5 shrink-0 ${accent[t.type]}`} />
-              <p className="flex-1 text-sm text-zinc-100">{t.message}</p>
+              <p className="flex-1 text-sm text-[#1c1917]">{t.message}</p>
               <button onClick={() => dismissToast(t.id)} className="text-zinc-500 hover:text-white">
                 <X className="h-4 w-4" />
               </button>

@@ -55,10 +55,12 @@ service cloud.firestore {
       // Public read: only approved and active products visible to everyone
       allow read: if true;
       // Sellers can create their own products (status defaults to pending)
-      allow create: if isSignedIn()
-        && request.auth.token.role == "seller"
-        && request.resource.data.sellerId == request.auth.uid
-        && request.resource.data.status == "pending";
+      allow create: if isSignedIn() && (
+        (request.auth.token.role == "seller"
+          && request.resource.data.sellerId == request.auth.uid
+          && request.resource.data.status == "pending")
+        || isAdmin()
+      );
       // Sellers can update their own products; admins can update any
       allow update: if isSignedIn() && (
         isAdmin()
