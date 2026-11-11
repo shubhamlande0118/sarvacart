@@ -220,6 +220,9 @@ export default async function handler(request: VercelRequest, response: VercelRe
       const code = err.code || "";
       const message = err.message || "";
 
+      // Log the raw error for server-side diagnostics (never exposed to client)
+      console.error("[orders/create] Error:", { code, message });
+
       if (message === "FIREBASE_SERVICE_ACCOUNT is not configured.") {
         return sendError(response, 500, "Checkout service is not configured.", "FIREBASE_ADMIN_NOT_CONFIGURED");
       }
@@ -247,26 +250,32 @@ export default async function handler(request: VercelRequest, response: VercelRe
       if (code.startsWith("auth/") || message.includes("auth/") || message.includes("token") || message.includes("credential")) {
         return sendError(response, 401, "Authentication failed.", "AUTHENTICATION_FAILED");
       }
+      if (code === "permission-denied" || message.includes("permission") || message.includes("denied")) {
+        return sendError(response, 403, "Database access denied.", "FIRESTORE_PERMISSION_DENIED");
+      }
+      if (code === "not-found" || message.includes("not-found") || message.includes("does not exist")) {
+        return sendError(response, 404, "Resource not found.", "RESOURCE_NOT_FOUND");
+      }
+      if (code === "already-exists" || message.includes("already-exists")) {
+        return sendError(response, 409, "Order already exists.", "ORDER_ALREADY_EXISTS");
+      }
+      if (code === "deadline-exceeded" || message.includes("deadline") || message.includes("timeout")) {
+        return sendError(response, 504, "Request timed out.", "REQUEST_TIMEOUT");
+      }
+      if (code === "unavailable" || message.includes("unavailable")) {
+        return sendError(response, 503, "Database temporarily unavailable.", "FIRESTORE_TEMPORARILY_UNAVAILABLE");
+      }
+      if (code === "failed-precondition" || message.includes("failed-precondition") || message.includes("aborted")) {
+        return sendError(response, 409, "Transaction failed - concurrent modification.", "TRANSACTION_ABORTED");
+      }
+      if (code === "resource-exhausted") {
+        return sendError(response, 429, "Database quota exhausted.", "QUOTA_EXHAUSTED");
+      }
       if (message.includes("cart product")) {
         return sendError(response, 400, message, "PRODUCT_NOT_FOUND");
       }
       if (message.includes("out of stock")) {
         return sendError(response, 409, message, "OUT_OF_STOCK");
-      }
-      if (message.includes("permission") || message.includes("denied")) {
-        return sendError(response, 403, "Database access denied.", "FIRESTORE_PERMISSION_DENIED");
-      }
-      if (message.includes("not-found") || message.includes("does not exist")) {
-        return sendError(response, 404, "Resource not found.", "RESOURCE_NOT_FOUND");
-      }
-      if (message.includes("already-exists")) {
-        return sendError(response, 409, "Order already exists.", "ORDER_ALREADY_EXISTS");
-      }
-      if (message.includes("deadline") || message.includes("timeout")) {
-        return sendError(response, 504, "Request timed out.", "REQUEST_TIMEOUT");
-      }
-      if (message.includes("unavailable") || message.includes("internal")) {
-        return sendError(response, 503, "Database temporarily unavailable.", "FIRESTORE_TEMPORARILY_UNAVAILABLE");
       }
       return sendError(response, 500, "Unable to create the order. Please try again.", "ORDER_CREATION_FAILED");
     }
