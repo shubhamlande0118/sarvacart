@@ -128,9 +128,9 @@ export default async function handler(request: VercelRequest, response: VercelRe
           }
           if (!snapshot.exists) throw new Error(`Product not found: ${productId}`);
           const product = snapshot.data() as DocumentData;
-          if (product.active !== true || !Number.isInteger(product.stock) || product.stock < qty
+          if (product.active === false || !Number.isInteger(product.stock) || product.stock < qty
             || typeof product.price !== "number" || typeof product.discountPrice !== "number") {
-            throw new Error(`Product ${productId} is out of stock or inactive`);
+            throw new Error(`Product ${productId} is out of stock or inactive.`);
           }
           productSnapshots.set(productId, product);
         }
@@ -293,13 +293,34 @@ export default async function handler(request: VercelRequest, response: VercelRe
       if (code === "resource-exhausted") {
         return sendError(response, 429, "Database quota exhausted.", "QUOTA_EXHAUSTED");
       }
+      if (code === "invalid-argument" || message.includes("invalid-argument")) {
+        return sendError(response, 400, "Invalid request data.", "INVALID_ARGUMENT");
+      }
+      if (code === "out-of-range" || message.includes("out-of-range")) {
+        return sendError(response, 400, "Value out of range.", "OUT_OF_RANGE");
+      }
+      if (code === "unauthenticated") {
+        return sendError(response, 401, "Authentication required.", "UNAUTHENTICATED");
+      }
+      if (code === "unimplemented") {
+        return sendError(response, 501, "Feature not implemented.", "UNIMPLEMENTED");
+      }
+      if (code === "cancelled" || message.includes("cancelled")) {
+        return sendError(response, 500, "Transaction cancelled.", "TRANSACTION_CANCELLED");
+      }
+      if (code === "data-loss") {
+        return sendError(response, 500, "Data loss error.", "DATA_LOSS");
+      }
+      if (code === "unknown" || message.includes("unknown error")) {
+        return sendError(response, 500, `Unknown error: ${message}`, "UNKNOWN_ERROR");
+      }
       if (message.includes("cart product")) {
         return sendError(response, 400, message, "PRODUCT_NOT_FOUND");
       }
       if (message.includes("out of stock")) {
         return sendError(response, 409, message, "OUT_OF_STOCK");
       }
-      return sendError(response, 500, "Unable to create the order. Please try again.", "ORDER_CREATION_FAILED");
+      return sendError(response, 500, `Unable to create the order: ${message}`, "ORDER_CREATION_FAILED");
     }
     } catch (error) {
     // Outer safety net: any uncaught error (including platform/runtime issues)
