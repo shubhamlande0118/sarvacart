@@ -42,7 +42,7 @@ export default function ManageProducts() {
             <div key={p.id} className="glass flex items-center gap-4 rounded-2xl p-4">
               <img src={p.images[0]} alt="" className="h-16 w-14 rounded-lg object-cover" />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-white">{p.name}</p>
+                <p className="truncate font-medium text-[#1c1917]">{p.name}</p>
                 <p className="text-xs text-zinc-500">{cat?.name}</p>
               </div>
               <div className="hidden text-right sm:block">

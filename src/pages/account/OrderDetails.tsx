@@ -46,7 +46,7 @@ export default function OrderDetails() {
       <div className="mt-5 flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-widest text-zinc-500">Order</p>
-          <h1 className="mt-1 font-serif text-4xl font-bold text-white">{order.id}</h1>
+          <h1 className="mt-1 font-serif text-4xl font-bold text-[#1c1917]">{order.id}</h1>
           <p className="mt-2 text-sm text-zinc-400">{new Date(order.createdAt).toLocaleString("en-IN")}</p>
         </div>
         <span className="rounded-full bg-amber-500/15 px-3 py-1 text-sm font-semibold text-amber-300">{order.status}</span>
@@ -55,7 +55,7 @@ export default function OrderDetails() {
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_340px]">
         <section className="glass rounded-2xl p-6">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="font-serif text-2xl font-bold text-white">Order tracking</h2>
+            <h2 className="font-serif text-2xl font-bold text-[#1c1917]">Order tracking</h2>
             {order.shipment?.awb && (
               <button
                 type="button"
@@ -83,7 +83,7 @@ export default function OrderDetails() {
                       {index < trackingSteps.length - 1 && <span className={cn("absolute top-6 h-8 w-px", complete ? "bg-emerald-400" : "bg-zinc-700")} />}
                     </div>
                     <div>
-                      <p className={cn("font-medium", complete || current ? "text-white" : "text-zinc-500")}>{step}</p>
+                      <p className={cn("font-medium", complete || current ? "text-[#1c1917]" : "text-zinc-500")}>{step}</p>
                       <p className="mt-1 text-xs text-zinc-500">{current ? "Current status" : complete ? "Completed" : "Upcoming"}</p>
                     </div>
                   </li>
@@ -114,13 +114,13 @@ export default function OrderDetails() {
         </section>
 
         <aside className="glass h-fit rounded-2xl p-6">
-          <h2 className="font-serif text-2xl font-bold text-white">Order summary</h2>
+          <h2 className="font-serif text-2xl font-bold text-[#1c1917]">Order summary</h2>
           <div className="mt-5 space-y-4">
             {order.items.map((item) => (
               <div key={`${item.productId}-${item.size}-${item.color}`} className="flex gap-3">
                 <img src={item.image} alt="" className="h-16 w-14 rounded-lg object-cover" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-white">{item.name}</p>
+                  <p className="truncate text-sm text-[#1c1917]">{item.name}</p>
                   <p className="text-xs text-zinc-500">Qty {item.qty} · {formatINR(item.price * item.qty)}</p>
                 </div>
               </div>

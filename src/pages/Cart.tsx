@@ -87,7 +87,7 @@ export default function Cart() {
                     <div className="flex justify-between gap-2">
                       <div>
                         <p className="text-[11px] uppercase tracking-widest text-gold-soft">{cat?.name}</p>
-                        <Link to={`/product/${l.product.id}`} className="font-serif text-xl text-white hover:text-gold-soft">
+                        <Link to={`/product/${l.product.id}`} className="font-serif text-xl text-[#1c1917] hover:text-gold-soft">
                           {l.product.name}
                         </Link>
                         <p className="mt-0.5 text-xs text-zinc-500">
@@ -104,13 +104,13 @@ export default function Cart() {
 
                     <div className="mt-auto flex items-end justify-between">
                       <div className="glass-light flex items-center gap-2 rounded-full px-2 py-1">
-                        <button onClick={() => setQty(l, l.qty - 1)} className="rounded-full p-1.5 text-white hover:bg-white/10">
+                        <button onClick={() => setQty(l, l.qty - 1)} className="rounded-full p-1.5 text-[#1c1917] hover:bg-white/10">
                           <Minus className="h-3.5 w-3.5" />
                         </button>
-                        <span className="w-7 text-center text-sm text-white">{l.qty}</span>
+                        <span className="w-7 text-center text-sm text-[#1c1917]">{l.qty}</span>
                         <button
                           onClick={() => setQty(l, Math.min(l.product.stock, l.qty + 1))}
-                          className="rounded-full p-1.5 text-white hover:bg-white/10"
+                          className="rounded-full p-1.5 text-[#1c1917] hover:bg-white/10"
                         >
                           <Plus className="h-3.5 w-3.5" />
                         </button>

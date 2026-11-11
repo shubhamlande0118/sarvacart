@@ -67,7 +67,7 @@ export default function AdminOrders() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-semibold text-gold-soft">{o.id}</p>
-                  <p className="text-sm text-white">{o.customer.name} · {o.customer.phone}</p>
+                  <p className="text-sm text-[#1c1917]">{o.customer.name} · {o.customer.phone}</p>
                   <p className="text-xs text-zinc-500">{o.customer.email}</p>
                   <p className="mt-1 max-w-md text-xs text-zinc-500">{o.customer.address}</p>
                 </div>
